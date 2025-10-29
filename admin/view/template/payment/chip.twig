@@ -1,0 +1,293 @@
+{{ header }}{{ column_left }}
+<div id="content">
+ <div class="page-header">
+ <div class="container-fluid">
+  <div class="float-end">
+  <button type="submit" form="form-payment" data-bs-toggle="tooltip" title="{{ button_save }}" class="btn btn-primary"><i class="fa-solid fa-save"></i></button>
+  <a href="{{ back }}" data-bs-toggle="tooltip" title="{{ button_cancel }}" class="btn btn-light"><i class="fa-solid fa-reply"></i></a></div>
+  <h1>{{ heading_title }}</h1>
+  <ol class="breadcrumb">
+  {% for breadcrumb in breadcrumbs %}
+   <li class="breadcrumb-item"><a href="{{ breadcrumb.href }}">{{ breadcrumb.text }}</a></li>
+  {% endfor %}
+  </ol>
+ </div>
+ </div>
+ <div class="container-fluid">
+
+ <div class="card">
+  <div class="card-header"><i class="fa-solid fa-pencil"></i> {{ text_edit }}</div>
+  <div class="card-body">
+  <form action="{{ save }}" method="post" id="form-payment" data-oc-toggle="ajax">
+   <ol class="nav nav-tabs">
+    <li class="nav-item"><a href="#tab-general" data-bs-toggle="tab" class="nav-link active">{{ tab_general }}</a></li>
+    <li class="nav-item"><a href="#tab-misc" data-bs-toggle="tab" class="nav-link">{{ tab_miscellaneous }}</a></li>
+    <li class="nav-item"><a href="#tab-order-status" data-bs-toggle="tab" class="nav-link">{{ tab_order_status }}</a></li>
+    <li class="nav-item"><a href="#tab-checkout" data-bs-toggle="tab" class="nav-link">{{ tab_checkout }}</a></li>
+    <li class="nav-item"><a href="#tab-troubleshoot" data-bs-toggle="tab" class="nav-link">{{ tab_troubleshoot }}</a></li>
+    <li class="nav-item"><a href="#tab-report" data-bs-toggle="tab" class="nav-link">{{ tab_report }}</a></li>
+    <li class="nav-item"><a href="#tab-token" data-bs-toggle="tab" class="nav-link">{{ tab_token }}</a></li>
+   </ol>
+   <div class="tab-content">
+   <div class="tab-pane active" id="tab-general">
+    {% for language in languages %}
+     <div class="row mb-3 required">
+      <label class="col-sm-2 col-form-label" for="input-payment-name-{{ language.language_id }}"><span data-bs-toggle="tooltip" title="{{ help_payment_name }}" class="col-sm-2 col-form-label">{{ entry_payment_name }}</span></label>
+      <div class="col-sm-10">
+       <div class="input-group"><span class="input-group-text"><img src="{{ language.image }}" title="{{ language.name }}" /></span>
+        <input type="text" name="payment_chip_payment_name_{{ language.language_id }}" placeholder="{{ entry_payment_name }}" id="input-payment-name-{{ language.language_id }}" class="form-control" value="{% if payment_chip_payment_name[language.language_id] %}{{ payment_chip_payment_name[language.language_id] }}{% else %}{{ text_title }}{% endif %}">
+       </div>
+       <div id="error-payment-name-{{ language.language_id }}" class="invalid-feedback"></div>
+      </div>
+     </div>
+    {% endfor %}
+    <div class="row mb-3 required">
+    <label class="col-sm-2 col-form-label" for="input-secret-key"><span data-bs-toggle="tooltip" title="{{ help_secret_key }}" class="col-sm-2 col-form-label">{{ entry_secret_key }}</span></label>
+    <div class="col-sm-10">
+     <input type="text" name="payment_chip_secret_key" value="{{ payment_chip_secret_key }}" placeholder="{{ entry_secret_key }}" id="input-secret-key" class="form-control" />
+     <div id="error-secret-key" class="invalid-feedback"></div>
+    </div>
+    </div>
+    <div class="row mb-3 required">
+    <label class="col-sm-2 col-form-label" for="input-brand-id"><span data-bs-toggle="tooltip" title="{{ help_brand_id }}" class="col-sm-2 col-form-label">{{ entry_brand_id }}</span></label>
+    <div class="col-sm-10">
+     <input type="text" name="payment_chip_brand_id" value="{{ payment_chip_brand_id }}" placeholder="{{ entry_brand_id }}" id="input-brand-id" class="form-control" />
+     <div id="error-brand-id" class="invalid-feedback"></div>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-geo-zone"><span data-bs-toggle="tooltip" title="{{ help_geo_zone }}">{{ entry_geo_zone }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_geo_zone_id" id="input-geo-zone" class="form-select">
+     <option value="0">{{ text_all_zones }}</option>
+     {% for geo_zone in geo_zones %}
+      {% if geo_zone.geo_zone_id == payment_chip_geo_zone_id %}
+       <option value="{{ geo_zone.geo_zone_id }}" selected="selected">{{ geo_zone.name }}</option>
+{% else %} 
+       <option value="{{ geo_zone.geo_zone_id }}">{{ geo_zone.name }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-status"><span data-bs-toggle="tooltip" title="{{ help_status }}" class="col-sm-2 col-form-label">{{ entry_status }}</span></label>
+    <div class="col-sm-10">
+     <div class="form-check form-switch form-switch-lg">
+       <input type="hidden" name="payment_chip_status" value="0"/>
+       <input type="checkbox" name="payment_chip_status" value="1" id="input-status" class="form-check-input"{% if payment_chip_status %} checked{% endif %}/>
+     </div>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-sort-order"><span data-bs-toggle="tooltip" title="{{ help_sort_order }}" class="col-sm-2 col-form-label">{{ entry_sort_order }}</span></label>
+    <div class="col-sm-10">
+     <input type="text" name="payment_chip_sort_order" value="{{ payment_chip_sort_order }}" placeholder="{{ entry_sort_order }}" id="input-sort-order" class="form-control" />
+    </div>
+    </div>
+   </div>
+   <div class="tab-pane" id="tab-misc">
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-convert-to-processing"><span data-bs-toggle="tooltip" title="{{ help_convert_to_processing }}" class="col-sm-2 col-form-label">{{ entry_convert_to_processing }}</span></label>
+    <div class="col-sm-10">
+     <div class="form-check form-switch form-switch-lg">
+       <input type="hidden" name="payment_chip_convert_to_processing" value="0"/>
+       <input type="checkbox" name="payment_chip_convert_to_processing" value="1" id="input-convert-to-processing" class="form-check-input"{% if payment_chip_convert_to_processing %} checked{% endif %}/>
+     </div>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-due-strict"><span data-bs-toggle="tooltip" title="{{ help_due_strict }}" class="col-sm-2 col-form-label">{{ entry_due_strict }}</span></label>
+    <div class="col-sm-10">
+     <div class="form-check form-switch form-switch-lg">
+       <input type="hidden" name="payment_chip_due_strict" value="0"/>
+       <input type="checkbox" name="payment_chip_due_strict" value="1" id="input-due-strict" class="form-check-input"{% if payment_chip_due_strict %} checked{% endif %}/>
+     </div>
+    </div>
+    </div>
+    <div class="row mb-3 required">
+    <label class="col-sm-2 col-form-label" for="input-due-strict-timing"><span data-bs-toggle="tooltip" title="{{ help_due_strict_timing }}" class="col-sm-2 col-form-label">{{ entry_due_strict_timing }}</span></label>
+    <div class="col-sm-10">
+     <input type="number" name="payment_chip_due_strict_timing" value="{{ payment_chip_due_strict_timing }}" placeholder="{{ entry_due_strict_timing }}" id="input-due-strict-timing" class="form-control" />
+     <div id="error-due-strict-timing" class="invalid-feedback"></div>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-time-zone"><span data-bs-toggle="tooltip" title="{{ help_time_zone }}" class="col-sm-2 col-form-label">{{ entry_time_zone }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_time_zone" id="input-time-zone" class="form-control">
+     {% for time_zone in time_zones %}
+      {% if time_zone == payment_chip_time_zone %}
+       <option value="{{ time_zone }}" selected="selected">{{ time_zone }}</option>
+{% else %} 
+       <option value="{{ time_zone }}">{{ time_zone }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-payment-method-whitelist"><span data-bs-toggle="tooltip" title="{{ help_payment_method_whitelist }}" class="col-sm-2 col-form-label">{{ entry_payment_method_whitelist }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_payment_method_whitelist[]" id="input-payment-method-whitelist" class="form-select" multiple size="10">
+     {% for value, name in payment_methods %}
+      {% if payment_chip_payment_method_whitelist and value in payment_chip_payment_method_whitelist %}
+       <option value="{{ value }}" selected="selected">{{ name }}</option>
+{% else %} 
+       <option value="{{ value }}">{{ name }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+     <small class="form-text text-muted">Hold Ctrl (or Cmd on Mac) to select multiple options. Leave empty to allow all payment methods.</small>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label"><span data-bs-toggle="tooltip" title="{{ help_general_public_key }}" class="col-sm-2 col-form-label">{{ entry_general_public_key }}</span></label>
+    <div class="col-sm-10">
+     <textarea name="payment_chip_general_public_key" cols="80" rows="10" placeholder="{{ entry_general_public_key }}" id="input-general-public-key" class="form-control" readonly>{{ payment_chip_general_public_key }}</textarea>
+    </div>
+    </div>
+   </div>
+   <div class="tab-pane" id="tab-order-status">
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label"><span data-bs-toggle="tooltip" title="{{ help_canceled_order_status }}" class="col-sm-2 col-form-label">{{ entry_canceled_order_status }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_canceled_order_status_id" class="form-control">
+     {% for order_status in order_statuses %}
+      {% if order_status.order_status_id == payment_chip_canceled_order_status_id %}
+       <option value="{{ order_status.order_status_id }}" selected="selected">{{ order_status.name }}</option>
+{% else %} 
+       <option value="{{ order_status.order_status_id }}">{{ order_status.name }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label"><span data-bs-toggle="tooltip" title="{{ help_failed_order_status }}" class="col-sm-2 col-form-label">{{ entry_failed_order_status }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_failed_order_status_id" class="form-control">
+     {% for order_status in order_statuses %}
+      {% if order_status.order_status_id == payment_chip_failed_order_status_id %}
+       <option value="{{ order_status.order_status_id }}" selected="selected">{{ order_status.name }}</option>
+{% else %} 
+       <option value="{{ order_status.order_status_id }}">{{ order_status.name }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label"><span data-bs-toggle="tooltip" title="{{ formatted_help_paid_order_status }}" class="col-sm-2 col-form-label">{{ entry_paid_order_status }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_paid_order_status_id" class="form-control">
+     {% for order_status in order_statuses %}
+      {% if order_status.order_status_id == payment_chip_paid_order_status_id %}
+       <option value="{{ order_status.order_status_id }}" selected="selected">{{ order_status.name }}</option>
+{% else %} 
+       <option value="{{ order_status.order_status_id }}">{{ order_status.name }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+    </div>
+    </div>
+    <hr class="my-4" />
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-canceled-behavior"><span data-bs-toggle="tooltip" title="{{ help_canceled_behavior }}" class="col-sm-2 col-form-label">{{ entry_canceled_behavior }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_canceled_behavior" id="input-canceled-behavior" class="form-control">
+     {% for key, canceled_behavior in canceled_behaviors %}
+      {% if key == payment_chip_canceled_behavior %}
+       <option value="{{ key }}" selected="selected">{{ canceled_behavior }}</option>
+{% else %} 
+       <option value="{{ key }}">{{ canceled_behavior }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-failed-behavior"><span data-bs-toggle="tooltip" title="{{ help_failed_behavior }}" class="col-sm-2 col-form-label">{{ entry_failed_behavior }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_failed_behavior" id="input-failed-behavior" class="form-control">
+     {% for key, failed_behavior in failed_behaviors %}
+      {% if key == payment_chip_failed_behavior %}
+       <option value="{{ key }}" selected="selected">{{ failed_behavior }}</option>
+{% else %} 
+       <option value="{{ key }}">{{ failed_behavior }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+    </div>
+    </div>
+   </div>
+   <div class="tab-pane" id="tab-checkout">
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-allow-instruction">{{ entry_allow_instruction }}</label>
+    <div class="col-sm-10">
+      <div class="form-check form-switch form-switch-lg">
+       <input type="hidden" name="payment_chip_allow_instruction" value="0"/>
+       <input type="checkbox" name="payment_chip_allow_instruction" value="1" id="input-allow-instruction" class="form-check-input"{% if payment_chip_allow_instruction %} checked{% endif %}/>
+     </div>
+    </div>
+    </div>
+    {% for language in languages %}
+     <div class="row mb-3">
+      <label class="col-sm-2 col-form-label" for="input-instruction-{{ language.language_id }}"><span data-bs-toggle="tooltip" title="{{ help_instruction }}" class="col-sm-2 col-form-label">{{ entry_instruction }}</span></label>
+      <div class="col-sm-10">
+       <div class="input-group"><span class="input-group-text"><img src="{{ language.image }}" title="{{ language.name }}" /></span>
+        <textarea cols="80" rows="10" name="payment_chip_instruction_{{ language.language_id }}" placeholder="{{ entry_instruction }}" id="input-instruction-{{ language.language_id }}" class="form-control">{% if payment_chip_instruction[language.language_id] %}{{ payment_chip_instruction[language.language_id] }}{% endif %}</textarea>
+       </div>
+       <div id="error-instruction-{{ language.language_id }}" class="invalid-feedback"></div>
+      </div>
+     </div>
+    {% endfor %}
+   </div>
+   <div class="tab-pane" id="tab-troubleshoot">
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-debug">{{ entry_debug }}</label>
+    <div class="col-sm-10">
+     <div class="form-check form-switch form-switch-lg">
+       <input type="hidden" name="payment_chip_debug" value="0"/>
+       <input type="checkbox" name="payment_chip_debug" value="1" id="input-debug" class="form-check-input"{% if payment_chip_debug %} checked{% endif %}/>
+     </div>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-disable-success-redirect"><span data-bs-toggle="tooltip" title="{{ help_disable_success_redirect }}" class="col-sm-2 col-form-label">{{ entry_disable_success_redirect }}</span></label>
+    <div class="col-sm-10">
+     <div class="form-check form-switch form-switch-lg">
+       <input type="hidden" name="payment_chip_disable_success_redirect" value="0"/>
+       <input type="checkbox" name="payment_chip_disable_success_redirect" value="1" id="input-disable-success-redirect" class="form-check-input"{% if payment_chip_disable_success_redirect %} checked{% endif %}/>
+     </div>
+    </div>
+    </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label" for="input-disable-success-callback"><span data-bs-toggle="tooltip" title="{{ help_disable_success_callback }}" class="col-sm-2 col-form-label">{{ entry_disable_success_callback }}</span></label>
+    <div class="col-sm-10">
+     <div class="form-check form-switch form-switch-lg">
+       <input type="hidden" name="payment_chip_disable_success_callback" value="0"/>
+       <input type="checkbox" name="payment_chip_disable_success_callback" value="1" id="input-disable-success-callback" class="form-check-input"{% if payment_chip_disable_success_callback %} checked{% endif %}/>
+     </div>
+    </div>
+    </div>
+   </div>
+   <div class="tab-pane" id="tab-report">
+    <fieldset>
+     <legend>{{ tab_report }}</legend>
+     <div id="report">{{ report }}</div>
+    </fieldset>
+   </div>
+   <div class="tab-pane" id="tab-token">
+    <fieldset>
+     <legend>{{ tab_token }}</legend>
+     <div id="token">{{ token }}</div>
+    </fieldset>
+   </div>
+   </div>
+  </form>
+  </div>
+ </div>
+ </div>
+</div>
+{{ footer }}

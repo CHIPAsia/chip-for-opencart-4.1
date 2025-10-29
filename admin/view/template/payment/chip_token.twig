@@ -1,0 +1,38 @@
+<div class="table-responsive">
+ <table class="table table-bordered table-hover">
+  <thead>
+   <tr>
+    <th class="text-start">{{ column_customer }}</th>
+    <th class="text-start">{{ column_token_id }}</th>
+    <th class="text-start">{{ column_card_type }}</th>
+    <th class="text-start">{{ column_card_name }}</th>
+    <th class="text-start">{{ column_card_number }}</th>
+    <th class="text-start">{{ column_card_expire }}</th>
+    <th class="text-start">{{ column_date_added }}</th>
+   </tr>
+  </thead>
+  <tbody>
+   {% if tokens %}
+    {% for token in tokens %}
+     <tr>
+      <td class="text-start"><a href="{{ token.customer }}" target="_blank">{{ token.customer_id }}</a></td>
+      <td class="text-start">{{ token.token_id }}</td>
+      <td class="text-start">{{ token.type }}</td>
+      <td class="text-start">{{ token.card_name }}</td>
+      <td class="text-start">{{ token.card_number }}</td>
+      <td class="text-start">{{ token.card_expire }}</td>
+      <td class="text-start">{{ token.date_added }}</td>
+     </tr>
+    {% endfor %}
+   {% else %}
+    <tr>
+     <td class="text-center" colspan="7">{{ text_no_results }}</td>
+    </tr>
+   {% endif %}
+  </tbody>
+ </table>
+</div>
+<div class="row">
+ <div class="col-sm-12 text-start">{{ token_pagination }}</div>
+</div>
+

@@ -1,0 +1,7 @@
+{
+  "name": "CHIP for OpenCart 4.1.x",
+  "version": "1.0.0",
+  "author": "CHIP IN SDN BHD",
+  "link": "https://www.chip-in.asia",
+  "description": "CHIP payment gateway integration for OpenCart 4.1.x. Accept payments securely with support for credit cards and stored payment methods."
+}
