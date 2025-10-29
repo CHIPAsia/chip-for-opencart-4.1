@@ -1,0 +1,30 @@
+name: Create Release Zip
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Create zip file
+        run: |
+          zip -r chip.ocmod.zip \
+            admin/ \
+            catalog/ \
+            install.json \
+            README.md \
+            Lax-Settings.png \
+            -x "*.DS_Store" "*.git*"
+      
+      - name: Upload release asset
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" chip.ocmod.zip --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
