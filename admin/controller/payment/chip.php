@@ -61,7 +61,7 @@ class Chip extends \Opencart\System\Engine\Controller {
       'razer_maybankqr' => 'Razer Maybankqr',
       'razer_shopeepay' => 'Razer Shopeepay',
       'razer_tng' => 'Razer Tng',
-      'duitnow_qr' => 'Duitnow QR',
+      'duitnow_qr' => 'DuitNow QR',
       'mpgs_google_pay' => 'Google Pay',
       'mpgs_apple_pay' => 'Apple Pay',
     );

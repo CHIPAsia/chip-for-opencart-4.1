@@ -125,7 +125,12 @@ class Chip extends \Opencart\System\Engine\Controller
 
     $payment_method_whitelist = $this->config->get('payment_chip_payment_method_whitelist');
     if (!empty($payment_method_whitelist)) {
-      $params['payment_method_whitelist'] = $payment_method_whitelist;
+      $this->model_extension_chip_payment_chip->setKeys($this->config->get('payment_chip_secret_key'), $this->config->get('payment_chip_brand_id'));
+      $params['payment_method_whitelist'] = $this->model_extension_chip_payment_chip->resolve_payment_method_whitelist(
+        $payment_method_whitelist,
+        'MYR',
+        round($total_override * 100)
+      );
     }
 
     foreach ($products as $product) {
@@ -361,7 +366,12 @@ class Chip extends \Opencart\System\Engine\Controller
 
     $payment_method_whitelist = $this->config->get('payment_chip_payment_method_whitelist');
     if (!empty($payment_method_whitelist)) {
-      $params['payment_method_whitelist'] = $payment_method_whitelist;
+      $this->model_extension_chip_payment_chip->setKeys($this->config->get('payment_chip_secret_key'), $this->config->get('payment_chip_brand_id'));
+      $params['payment_method_whitelist'] = $this->model_extension_chip_payment_chip->resolve_payment_method_whitelist(
+        $payment_method_whitelist,
+        'MYR',
+        round($total_override * 100)
+      );
     }
 
     foreach ($products as $product) {
