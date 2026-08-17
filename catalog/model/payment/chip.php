@@ -10,7 +10,7 @@ class Chip extends \Opencart\System\Engine\Model {
 
   private static array $payment_methods_cache = [];
 
-  public function getMethods(array $address): array {
+  public function getMethods(array $address = []): array {
     $this->load->language('extension/chip/payment/chip');
 
     if ($this->cart->hasSubscription()) {
