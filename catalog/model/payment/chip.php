@@ -3,6 +3,7 @@ namespace Opencart\Catalog\Model\Extension\Chip\Payment;
 
 class Chip extends \Opencart\System\Engine\Model {
   const DUITNOW_GROUP = ['duitnow_qr', 'dnqr'];
+  const SHOPEE_GROUP = ['razer_shopeepay', 'shopee_pay'];
 
   private string $private_key;
   private string $brand_id;
@@ -81,19 +82,33 @@ class Chip extends \Opencart\System\Engine\Model {
   public function resolve_payment_method_whitelist(array $whitelist, string $currency, int $amount): array {
     $whitelist = array_values($whitelist);
 
-    // 1. Short-circuit: no dnqr-group member configured → return untouched (no API call).
-    $has_group_member = count(array_intersect($whitelist, self::DUITNOW_GROUP)) > 0;
+    $groups = [
+      'dnqr'       => self::DUITNOW_GROUP,
+      'shopee_pay' => self::SHOPEE_GROUP,
+    ];
+
+    // 1. Short-circuit: no group member configured → return untouched (no API call).
+    $has_group_member = false;
+    foreach ($groups as $group) {
+      if (count(array_intersect($whitelist, $group)) > 0) {
+        $has_group_member = true;
+        break;
+      }
+    }
     if (!$has_group_member) {
       return $whitelist;
     }
 
-    // 2. Expand group in memory.
-    $expanded = array_values(array_unique(array_merge($whitelist, self::DUITNOW_GROUP)));
+    // 2. Expand all configured groups in memory.
+    $expanded = $whitelist;
+    foreach ($groups as $group) {
+      $expanded = array_values(array_unique(array_merge($expanded, $group)));
+    }
 
     // 3. Cache key: brand + currency + amount-bucket (round to 100-sen steps).
     $cache_key = $this->brand_id . '|' . $currency . '|' . intval($amount / 100);
 
-    // 4. Try static cache. On miss, call /payment_methods/.
+    // 4. Try static cache. On miss, call /payment_methods/ once.
     if (!isset(self::$payment_methods_cache[$cache_key])) {
       $response = $this->payment_methods($currency, '', $amount);
       if (!is_array($response) || !isset($response['available_payment_methods'])) {
@@ -104,17 +119,27 @@ class Chip extends \Opencart\System\Engine\Model {
     }
     $available = self::$payment_methods_cache[$cache_key];
 
-    // 5. Intersect: keep only group members the merchant actually has.
-    $resolved_group = array_values(array_intersect(self::DUITNOW_GROUP, $available));
-
-    // 6. Priority: dnqr wins when both are present.
-    if (in_array('dnqr', $resolved_group, true)) {
-      $resolved_group = array_values(array_diff($resolved_group, ['duitnow_qr']));
+    // 5. Resolve each configured group against what the merchant actually has.
+    $resolved = [];
+    foreach ($groups as $preferred => $group) {
+      if (count(array_intersect($whitelist, $group)) === 0) {
+        continue;
+      }
+      $resolved_group = array_values(array_intersect($group, $available));
+      // 6. Priority: preferred member wins when both are present.
+      if (in_array($preferred, $resolved_group, true)) {
+        $non_preferred = array_values(array_diff($group, [$preferred]));
+        $resolved_group = array_values(array_diff($resolved_group, $non_preferred));
+      }
+      $resolved = array_merge($resolved, $resolved_group);
     }
 
-    // 7. Final: original non-group entries + resolved group.
-    $final = array_values(array_diff($expanded, self::DUITNOW_GROUP));
-    $final = array_merge($final, $resolved_group);
+    // 7. Final: original non-group entries + resolved groups.
+    $final = $expanded;
+    foreach ($groups as $group) {
+      $final = array_values(array_diff($final, $group));
+    }
+    $final = array_merge($final, $resolved);
 
     return $final;
   }
