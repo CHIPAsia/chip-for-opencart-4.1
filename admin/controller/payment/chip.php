@@ -59,7 +59,7 @@ class Chip extends \Opencart\System\Engine\Controller {
       'razer_atome' => 'Razer Atome',
       'razer_grabpay' => 'Razer Grabpay',
       'razer_maybankqr' => 'Razer Maybankqr',
-      'razer_shopeepay' => 'ShopeePay (Razer Shopeepay)',
+      'razer_shopeepay' => 'ShopeePay',
       'razer_tng' => 'Razer Tng',
       'duitnow_qr' => 'DuitNow QR',
       'mpgs_google_pay' => 'Google Pay',
