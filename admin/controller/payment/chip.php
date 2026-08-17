@@ -62,6 +62,7 @@ class Chip extends \Opencart\System\Engine\Controller {
       'shopee_pay' => 'ShopeePay',
       'razer_tng' => "Touch 'n Go",
       'duitnow_qr' => 'DuitNow QR',
+      'crypto_coin' => 'Crypto Coin',
       'mpgs_google_pay' => 'Google Pay',
       'mpgs_apple_pay' => 'Apple Pay',
     );
