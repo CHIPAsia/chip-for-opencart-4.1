@@ -82,6 +82,17 @@ class Chip extends \Opencart\System\Engine\Model {
   public function resolve_payment_method_whitelist(array $whitelist, string $currency, int $amount): array {
     $whitelist = array_values($whitelist);
 
+    // In-memory migration: legacy 'razer_shopeepay' → modern 'shopee_pay'.
+    // Backward-compatible: only rewrite when the legacy key is present and the
+    // modern key is not, so a merchant who already saved 'shopee_pay' is untouched.
+    if (in_array('razer_shopeepay', $whitelist, true) && !in_array('shopee_pay', $whitelist, true)) {
+      $whitelist = array_map(
+        static fn($method) => $method === 'razer_shopeepay' ? 'shopee_pay' : $method,
+        $whitelist
+      );
+      $whitelist = array_values($whitelist);
+    }
+
     $groups = [
       'dnqr'       => self::DUITNOW_GROUP,
       'shopee_pay' => self::SHOPEE_GROUP,
