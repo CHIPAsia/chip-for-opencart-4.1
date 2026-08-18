@@ -2,209 +2,297 @@
 namespace Opencart\Catalog\Model\Extension\Chip\Payment;
 
 class Chip extends \Opencart\System\Engine\Model {
-  private string $private_key;
-  private string $brand_id;
+	const DUITNOW_GROUP = ['duitnow_qr', 'dnqr'];
+	const SHOPEE_GROUP = ['razer_shopeepay', 'shopee_pay'];
 
-  public function getMethods(array $address): array {
-    $this->load->language('extension/chip/payment/chip');
+	private string $private_key;
+	private string $brand_id;
 
-    if ($this->cart->hasSubscription()) {
-      return [];
-    }
+	private static array $payment_methods_cache = [];
 
-    $geo_zone_id = $this->config->get('payment_chip_geo_zone_id');
+	public function getMethods(array $address = []): array {
+		$this->load->language('extension/chip/payment/chip');
 
-    if (!$geo_zone_id) {
-      $status = true;
-    } else {
-      $query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "zone_to_geo_zone` WHERE `geo_zone_id` = '" . (int)$geo_zone_id . "' AND `country_id` = '" . (int)$address['country_id'] . "' AND (`zone_id` = '" . (int)$address['zone_id'] . "' OR `zone_id` = '0')");
-      
-      $status = (bool)$query->num_rows;
-    }
+		if ($this->cart->hasSubscription()) {
+			return [];
+		}
 
-    if (!$status) {
-      return [];
-    }
+		$geo_zone_id = $this->config->get('payment_chip_geo_zone_id');
 
-    $method_data = [
-      'name'       => $this->language->get('heading_title'),
-      'code'       => 'chip',
-      'title'      => nl2br($this->config->get('payment_chip_payment_name_' . $this->config->get('config_language_id'))),
-      'sort_order' => $this->config->get('payment_chip_sort_order')
-    ];
+		if (!$geo_zone_id) {
+			$status = true;
+		} else {
+			$query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "zone_to_geo_zone` WHERE `geo_zone_id` = '" . (int)$geo_zone_id . "' AND `country_id` = '" . (int)$address['country_id'] . "' AND (`zone_id` = '" . (int)$address['zone_id'] . "' OR `zone_id` = '0')");
+			
+			$status = (bool)$query->num_rows;
+		}
 
-    // Get available tokens for the customer
-    $option_data = [];
-    $has_tokens = false;
-    if ($this->customer->getId()) {
-      $tokens = $this->getTokens($this->customer->getId());
-      
-      // Always add the option to use a new card
-      $option_data['chip'] = [
-        'code' => 'chip.chip',
-        'name' => nl2br($this->config->get('payment_chip_payment_name_' . $this->config->get('config_language_id')))
-      ];
+		if (!$status) {
+			return [];
+		}
 
-      foreach ($tokens as $token) {
-        $option_data[$token['chip_token_id']] = [
-          'code' => 'chip.' . $token['chip_token_id'],
-          'name' => $this->language->get('text_card_use') . ' ' . $this->language->get('text_' . $token['type']) . ' ' . $token['card_number']
-        ];
-      }
-    }
+		$method_data = [
+			'name'       => $this->language->get('heading_title'),
+			'code'       => 'chip',
+			'title'      => nl2br($this->config->get('payment_chip_payment_name_' . $this->config->get('config_language_id'))),
+			'sort_order' => $this->config->get('payment_chip_sort_order')
+		];
 
-    $method_data['option'] = $option_data;
+		// Get available tokens for the customer
+		$option_data = [];
+		$has_tokens = false;
+		if ($this->customer->getId()) {
+			$tokens = $this->getTokens($this->customer->getId());
+			
+			// Always add the option to use a new card
+			$option_data['chip'] = [
+				'code' => 'chip.chip',
+				'name' => nl2br($this->config->get('payment_chip_payment_name_' . $this->config->get('config_language_id')))
+			];
 
-    return $method_data;
-  }
+			foreach ($tokens as $token) {
+				$option_data[$token['chip_token_id']] = [
+					'code' => 'chip.' . $token['chip_token_id'],
+					'name' => $this->language->get('text_card_use') . ' ' . $this->language->get('text_' . $token['type']) . ' ' . $token['card_number']
+				];
+			}
+		}
 
-  public function setKeys(string $private_key, string $brand_id): void {
-    $this->private_key = $private_key;
-    $this->brand_id = $brand_id;
-  }
+		$method_data['option'] = $option_data;
 
-  public function createPurchase(array $params): array {
-    return $this->call('POST', '/purchases/', $params);
-  }
+		return $method_data;
+	}
 
-  public function getPurchase(string $purchase_id): array {
-    return $this->call('GET', "/purchases/{$purchase_id}/");
-  }
+	public function setKeys(string $private_key, string $brand_id): void {
+		$this->private_key = $private_key;
+		$this->brand_id = $brand_id;
+	}
 
-  public function chargeToken(string $purchase_id, string $token_id): array {
-    $params = [
-      'recurring_token' => $token_id
-    ];
-    return $this->call('POST', "/purchases/{$purchase_id}/charge/", $params);
-  }
+	public function createPurchase(array $params): array {
+		return $this->call('POST', '/purchases/', $params);
+	}
 
-  public function getTokenByChipTokenId(int $chip_token_id): ?array {
-    $query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_token` WHERE `chip_token_id` = " . (int)$chip_token_id);
-    
-    if ($query->num_rows) {
-      return $query->row;
-    }
-    
-    return null;
-  }
+	public function payment_methods(string $currency, string $language, int $amount): ?array {
+		return $this->call(
+			'GET',
+			"/payment_methods/?brand_id={$this->brand_id}&currency={$currency}&language={$language}&amount={$amount}"
+		);
+	}
+
+	public function resolve_payment_method_whitelist(array $whitelist, string $currency, int $amount): array {
+		$whitelist = array_values($whitelist);
+
+		// In-memory migration: legacy 'razer_shopeepay' → modern 'shopee_pay'.
+		// Backward-compatible: only rewrite when the legacy key is present and the
+		// modern key is not, so a merchant who already saved 'shopee_pay' is untouched.
+		if (in_array('razer_shopeepay', $whitelist, true) && !in_array('shopee_pay', $whitelist, true)) {
+			$whitelist = array_map(
+				static fn($method) => $method === 'razer_shopeepay' ? 'shopee_pay' : $method,
+				$whitelist
+			);
+			$whitelist = array_values($whitelist);
+		}
+
+		$groups = [
+			'dnqr'       => self::DUITNOW_GROUP,
+			'shopee_pay' => self::SHOPEE_GROUP,
+		];
+
+		// 1. Short-circuit: no group member configured → return untouched (no API call).
+		$has_group_member = false;
+		foreach ($groups as $group) {
+			if (count(array_intersect($whitelist, $group)) > 0) {
+				$has_group_member = true;
+				break;
+			}
+		}
+		if (!$has_group_member) {
+			return $whitelist;
+		}
+
+		// 2. Expand all configured groups in memory.
+		$expanded = $whitelist;
+		foreach ($groups as $group) {
+			$expanded = array_values(array_unique(array_merge($expanded, $group)));
+		}
+
+		// 3. Cache key: brand + currency + amount-bucket (round to 100-sen steps).
+		$cache_key = $this->brand_id . '|' . $currency . '|' . intval($amount / 100);
+
+		// 4. Try static cache. On miss, call /payment_methods/ once.
+		if (!isset(self::$payment_methods_cache[$cache_key])) {
+			$response = $this->payment_methods($currency, '', $amount);
+			if (!is_array($response) || !isset($response['available_payment_methods'])) {
+				// 4a. Fallback: return expanded whitelist unchanged on API failure.
+				return $expanded;
+			}
+			self::$payment_methods_cache[$cache_key] = $response['available_payment_methods'];
+		}
+		$available = self::$payment_methods_cache[$cache_key];
+
+		// 5. Resolve each configured group against what the merchant actually has.
+		$resolved = [];
+		foreach ($groups as $preferred => $group) {
+			if (count(array_intersect($whitelist, $group)) === 0) {
+				continue;
+			}
+			$resolved_group = array_values(array_intersect($group, $available));
+			// 6. Priority: preferred member wins when both are present.
+			if (in_array($preferred, $resolved_group, true)) {
+				$non_preferred = array_values(array_diff($group, [$preferred]));
+				$resolved_group = array_values(array_diff($resolved_group, $non_preferred));
+			}
+			$resolved = array_merge($resolved, $resolved_group);
+		}
+
+		// 7. Final: original non-group entries + resolved groups.
+		$final = $expanded;
+		foreach ($groups as $group) {
+			$final = array_values(array_diff($final, $group));
+		}
+		$final = array_merge($final, $resolved);
+
+		return $final;
+	}
+
+	public function getPurchase(string $purchase_id): array {
+		return $this->call('GET', "/purchases/{$purchase_id}/");
+	}
+
+	public function chargeToken(string $purchase_id, string $token_id): array {
+		$params = [
+			'recurring_token' => $token_id
+		];
+		return $this->call('POST', "/purchases/{$purchase_id}/charge/", $params);
+	}
+
+	public function getTokenByChipTokenId(int $chip_token_id): ?array {
+		$query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_token` WHERE `chip_token_id` = " . (int)$chip_token_id);
+		
+		if ($query->num_rows) {
+			return $query->row;
+		}
+		
+		return null;
+	}
 
 
-  public function addReport(array $data): void {
-    $this->db->query("INSERT INTO `" . DB_PREFIX . "chip_report` 
-      (`customer_id`, `chip_id`, `order_id`, `status`, `amount`, `environment_type`, `date_added`) 
-      VALUES (" . (int)$data['customer_id'] . ", '" . $this->db->escape($data['chip_id']) . "', " . (int)$data['order_id'] . ", 
-      '" . $this->db->escape($data['status']) . "', '" . (float)$data['amount'] . "', 
-      '" . $this->db->escape($data['environment_type']) . "', NOW())");
-  }
+	public function addReport(array $data): void {
+		$this->db->query("INSERT INTO `" . DB_PREFIX . "chip_report` 
+			(`customer_id`, `chip_id`, `order_id`, `status`, `amount`, `environment_type`, `date_added`) 
+			VALUES (" . (int)$data['customer_id'] . ", '" . $this->db->escape($data['chip_id']) . "', " . (int)$data['order_id'] . ", 
+			'" . $this->db->escape($data['status']) . "', '" . (float)$data['amount'] . "', 
+			'" . $this->db->escape($data['environment_type']) . "', NOW())");
+	}
 
-  public function updateReportStatus(string $chip_id, string $status): void {
-    $this->db->query("UPDATE `" . DB_PREFIX . "chip_report` 
-      SET `status` = '" . $this->db->escape($status) . "' 
-      WHERE `chip_id` = '" . $this->db->escape($chip_id) . "'");
-  }
+	public function updateReportStatus(string $chip_id, string $status): void {
+		$this->db->query("UPDATE `" . DB_PREFIX . "chip_report` 
+			SET `status` = '" . $this->db->escape($status) . "' 
+			WHERE `chip_id` = '" . $this->db->escape($chip_id) . "'");
+	}
 
-  public function getReportByOrderId(int $order_id): ?array {
-    $query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_report` WHERE `order_id` = " . (int)$order_id . " ORDER BY `date_added` DESC LIMIT 1");
-    
-    if ($query->num_rows) {
-      return $query->row;
-    }
-    
-    return null;
-  }
+	public function getReportByOrderId(int $order_id): ?array {
+		$query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_report` WHERE `order_id` = " . (int)$order_id . " ORDER BY `date_added` DESC LIMIT 1");
+		
+		if ($query->num_rows) {
+			return $query->row;
+		}
+		
+		return null;
+	}
 
-  public function addToken(array $data): void {
-    $this->db->query("INSERT INTO `" . DB_PREFIX . "chip_token` 
-      (`customer_id`, `token_id`, `type`, `card_name`, `card_number`, `card_expire_month`, `card_expire_year`, `date_added`) 
-      VALUES (" . (int)$data['customer_id'] . ", 
-      '" . $this->db->escape($data['token_id']) . "', 
-      '" . $this->db->escape($data['type']) . "', 
-      '" . $this->db->escape($data['card_name']) . "', 
-      '" . $this->db->escape($data['card_number']) . "', 
-      '" . $this->db->escape($data['card_expire_month']) . "', 
-      '" . $this->db->escape($data['card_expire_year']) . "', 
-      NOW())");
-  }
+	public function addToken(array $data): void {
+		$this->db->query("INSERT INTO `" . DB_PREFIX . "chip_token` 
+			(`customer_id`, `token_id`, `type`, `card_name`, `card_number`, `card_expire_month`, `card_expire_year`, `date_added`) 
+			VALUES (" . (int)$data['customer_id'] . ", 
+			'" . $this->db->escape($data['token_id']) . "', 
+			'" . $this->db->escape($data['type']) . "', 
+			'" . $this->db->escape($data['card_name']) . "', 
+			'" . $this->db->escape($data['card_number']) . "', 
+			'" . $this->db->escape($data['card_expire_month']) . "', 
+			'" . $this->db->escape($data['card_expire_year']) . "', 
+			NOW())");
+	}
 
-  public function getTokens(int $customer_id): array {
-    $query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_token` 
-      WHERE `customer_id` = " . (int)$customer_id . " 
-      ORDER BY `date_added` DESC");
+	public function getTokens(int $customer_id): array {
+		$query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_token` 
+			WHERE `customer_id` = " . (int)$customer_id . " 
+			ORDER BY `date_added` DESC");
 
-    return $query->rows;
-  }
+		return $query->rows;
+	}
 
-  public function getToken(int $customer_id, int $chip_token_id): ?array {
-    $query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_token` 
-      WHERE `customer_id` = " . (int)$customer_id . " 
-      AND `chip_token_id` = " . (int)$chip_token_id);
-    
-    if ($query->num_rows) {
-      return $query->row;
-    }
-    
-    return null;
-  }
+	public function getToken(int $customer_id, int $chip_token_id): ?array {
+		$query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_token` 
+			WHERE `customer_id` = " . (int)$customer_id . " 
+			AND `chip_token_id` = " . (int)$chip_token_id);
+		
+		if ($query->num_rows) {
+			return $query->row;
+		}
+		
+		return null;
+	}
 
-  public function deleteToken(int $customer_id, int $chip_token_id): void {
-    $this->db->query("DELETE FROM `" . DB_PREFIX . "chip_token` 
-      WHERE `customer_id` = " . (int)$customer_id . " 
-      AND `chip_token_id` = " . (int)$chip_token_id);
-  }
+	public function deleteToken(int $customer_id, int $chip_token_id): void {
+		$this->db->query("DELETE FROM `" . DB_PREFIX . "chip_token` 
+			WHERE `customer_id` = " . (int)$customer_id . " 
+			AND `chip_token_id` = " . (int)$chip_token_id);
+	}
 
-  private function call(string $method, string $route, array $params = []): ?array {
-    $private_key = $this->private_key;
-    if (!empty($params) || is_array($params)) {
-      $params = json_encode($params);
-    }
+	private function call(string $method, string $route, array $params = []): ?array {
+		$private_key = $this->private_key;
+		if (!empty($params) || is_array($params)) {
+			$params = json_encode($params);
+		}
 
-    $response = $this->request(
-      $method,
-      sprintf("%s/api/v1%s", 'https://gate.chip-in.asia', $route),
-      $params,
-      [
-        'Content-type: application/json',
-        'Authorization: ' . "Bearer " . $private_key,
-      ]
-    );
+		$response = $this->request(
+			$method,
+			sprintf("%s/api/v1%s", 'https://gate.chip-in.asia', $route),
+			$params,
+			[
+				'Content-type: application/json',
+				'Authorization: ' . "Bearer " . $private_key,
+			]
+		);
 
-    $result = json_decode($response, true);
-    if (!$result) {
-      return null;
-    }
+		$result = json_decode($response, true);
+		if (!$result) {
+			return null;
+		}
 
-    if (!empty($result['errors'])) {
-      return null;
-    }
+		if (!empty($result['errors'])) {
+			return null;
+		}
 
-    return $result;
-  }
+		return $result;
+	}
 
-  private function request(string $method, string $url, string $params = '', array $headers = []): string {
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
+	private function request(string $method, string $url, string $params = '', array $headers = []): string {
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL, $url);
 
-    if ($method == 'POST') {
-      curl_setopt($ch, CURLOPT_POST, 1);
-    }
+		if ($method == 'POST') {
+			curl_setopt($ch, CURLOPT_POST, 1);
+		}
 
-    if ($method == 'PUT') {
-      curl_setopt($ch, CURLOPT_PUT, 1);
-    }
+		if ($method == 'PUT') {
+			curl_setopt($ch, CURLOPT_PUT, 1);
+		}
 
-    if ($method == 'PUT' or $method == 'POST') {
-      curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
-    }
+		if ($method == 'PUT' or $method == 'POST') {
+			curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
+		}
 
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_FRESH_CONNECT, 1);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+		curl_setopt($ch, CURLOPT_FRESH_CONNECT, 1);
+		curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-    $response = curl_exec($ch);
+		$response = curl_exec($ch);
 
-    curl_close($ch);
+		curl_close($ch);
 
-    return $response;
-  }
+		return $response;
+	}
 }
