@@ -43,6 +43,7 @@ class Chip extends \Opencart\System\Engine\Controller {
 		$data['payment_chip_canceled_order_status_id'] = $this->config->get('payment_chip_canceled_order_status_id');
 		$data['payment_chip_failed_order_status_id'] = $this->config->get('payment_chip_failed_order_status_id');
 		$data['payment_chip_paid_order_status_id'] = $this->config->get('payment_chip_paid_order_status_id');
+		$data['payment_chip_refunded_order_status_id'] = $this->config->get('payment_chip_refunded_order_status_id');
 		$data['payment_chip_allow_instruction'] = $this->config->get('payment_chip_allow_instruction');
 		$data['payment_chip_convert_to_processing'] = $this->config->get('payment_chip_convert_to_processing');
 		$data['payment_chip_disable_success_redirect'] = $this->config->get('payment_chip_disable_success_redirect');

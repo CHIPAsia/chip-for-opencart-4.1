@@ -191,6 +191,20 @@
      </select>
     </div>
     </div>
+    <div class="row mb-3">
+    <label class="col-sm-2 col-form-label"><span data-bs-toggle="tooltip" title="{{ help_refunded_order_status }}" class="col-sm-2 col-form-label">{{ entry_refunded_order_status }}</span></label>
+    <div class="col-sm-10">
+     <select name="payment_chip_refunded_order_status_id" class="form-control">
+     {% for order_status in order_statuses %}
+      {% if order_status.order_status_id == payment_chip_refunded_order_status_id %}
+       <option value="{{ order_status.order_status_id }}" selected="selected">{{ order_status.name }}</option>
+{% else %} 
+       <option value="{{ order_status.order_status_id }}">{{ order_status.name }}</option>
+      {% endif %}
+     {% endfor %}
+     </select>
+    </div>
+    </div>
     <hr class="my-4" />
     <div class="row mb-3">
     <label class="col-sm-2 col-form-label" for="input-canceled-behavior"><span data-bs-toggle="tooltip" title="{{ help_canceled_behavior }}" class="col-sm-2 col-form-label">{{ entry_canceled_behavior }}</span></label>

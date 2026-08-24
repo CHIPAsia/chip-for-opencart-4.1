@@ -9,18 +9,6 @@ class Chip extends \Opencart\System\Engine\Controller {
 
 
 		if (isset($this->session->data['payment_method'])) {
-			// $data['logged'] = $this->customer->isLogged();
-			// $data['subscription] = $this->cart->hasSubscription();
-
-			$data['types'] = [];
-
-			foreach (['visa', 'mastercard'] as $type) {
-				$data['types'][] = [
-					'text'  => $this->language->get('text_' . $type),
-					'value' => $type
-				];
-			}
-
 			// Card storage
 			if ($this->session->data['payment_method']['code'] == 'chip.chip') {
 				return $this->load->view('extension/chip/payment/chip', $data);
