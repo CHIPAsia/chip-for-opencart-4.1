@@ -16,10 +16,20 @@ class Chip extends \Opencart\System\Engine\Model {
 	/**
 	 * Days after the due date to retry a failed renewal charge.
 	 *
-	 * Measured from the original due date, not from "now", so a cron that runs
-	 * late cannot stretch the ladder.
+	 * Offsets are applied to the date the cycle was ACTUALLY due, which the
+	 * caller recovers via ladderAnchor() - not to the raw `date_next`
+	 * column, which a previous failed attempt has already overwritten with
+	 * its own retry time. Measuring from that raw value made the offsets
+	 * compound (D+1, D+4, D+9) instead of the intended 1/3/5.
 	 */
 	const RETRY_OFFSETS_DAYS = [1, 3, 5];
+
+	/**
+	 * Gateway error code from the most recent API call ('' on success).
+	 *
+	 * @var string
+	 */
+	private $last_error_code = '';
 
 	private string $private_key;
 	private string $brand_id;
@@ -139,7 +149,7 @@ class Chip extends \Opencart\System\Engine\Model {
 		return $this->getPurchase($purchase_id);
 	}
 
-	public function createPurchase(array $params): array {
+	public function createPurchase(array $params): ?array {
 		return $this->call('POST', '/purchases/', $params);
 	}
 
@@ -226,11 +236,11 @@ class Chip extends \Opencart\System\Engine\Model {
 		return $final;
 	}
 
-	public function getPurchase(string $purchase_id): array {
+	public function getPurchase(string $purchase_id): ?array {
 		return $this->call('GET', "/purchases/{$purchase_id}/");
 	}
 
-	public function chargeToken(string $purchase_id, string $token_id): array {
+	public function chargeToken(string $purchase_id, string $token_id): ?array {
 		$params = [
 			'recurring_token' => $token_id
 		];
@@ -535,8 +545,50 @@ class Chip extends \Opencart\System\Engine\Model {
 			return null;
 		}
 
-		return date('Y-m-d H:i:s', strtotime('+' . $offset . ' day', $timestamp));
+return date('Y-m-d H:i:s', strtotime('+' . $offset . ' day', $timestamp));
 	}
+
+	/**
+	 * The true due date a retry ladder is working from.
+	 *
+	 * `date_next` is rewritten twice per attempt: claimSubscription() moves it to
+	 * the next billing cycle, then recordSubscriptionFailure() moves it to the
+	 * retry time. So on a retry it holds the PREVIOUS retry time, not the date the
+	 * cycle was actually due - and measuring offsets from it makes them compound
+	 * (D+1, D+4, D+9) instead of the intended 1/3/5.
+	 *
+	 * The previous retry time is exactly `original + RETRY_OFFSETS_DAYS[retry_count - 1]`,
+	 * so the original is recovered by subtracting that same offset back off - which
+	 * is why this needs no schema change.
+	 *
+	 * @param string $date_next   Current `date_next` value.
+	 * @param int    $retry_count Failures so far (0-based).
+	 *
+	 * @return string
+	 */
+	public function ladderAnchor($date_next, $retry_count) {
+		$retry_count = (int)$retry_count;
+
+		if ($retry_count <= 0) {
+			// Nothing retried yet: the stored date IS the due date.
+			return $date_next;
+		}
+
+		if ($retry_count > count(self::RETRY_OFFSETS_DAYS)) {
+			// Counter from before this fix, or otherwise unexpected: do not guess.
+			return $date_next;
+		}
+
+		$offset    = self::RETRY_OFFSETS_DAYS[$retry_count - 1];
+		$timestamp = strtotime($date_next);
+
+		if ($timestamp === false) {
+			return $date_next;
+		}
+
+		return date('Y-m-d H:i:s', strtotime('-' . $offset . ' day', $timestamp));
+	}
+
 
 	/**
 	 * Advance a due date by one billing cycle.
@@ -592,7 +644,54 @@ class Chip extends \Opencart\System\Engine\Model {
 		return 0;
 	}
 
+	/**
+	 * Gateway error code from the most recent API call ('' on success).
+	 *
+	 * CHIP reports failures as `{"__all__": [{"code": "..."}]}`; a legacy
+	 * `errors` key is also accepted. The code used to be discarded, which made a
+	 * dead token indistinguishable from a card decline - so the dunning ladder
+	 * spent its whole budget retrying a token that could never work.
+	 *
+	 * @return string
+	 */
+	public function getLastErrorCode() {
+		return $this->last_error_code;
+	}
+
+	/**
+	 * Pull the error code out of a gateway error body, if there is one.
+	 *
+	 * @param array $result Decoded response body.
+	 *
+	 * @return string Empty when the body carries no error.
+	 */
+	private function extractErrorCode($result) {
+		foreach (['__all__', 'errors'] as $key) {
+			if (empty($result[$key])) {
+				continue;
+			}
+
+			$first = $result[$key];
+
+			if (isset($first[0]['code'])) {
+				return (string)$first[0]['code'];
+			}
+
+			if (isset($first['code'])) {
+				return (string)$first['code'];
+			}
+
+			if (is_string($first)) {
+				return $first;
+			}
+		}
+
+		return '';
+	}
+
 	private function call(string $method, string $route, array $params = []): ?array {
+		$this->last_error_code = '';
+
 		$private_key = $this->private_key;
 		if (!empty($params) || is_array($params)) {
 			$params = json_encode($params);
@@ -610,10 +709,17 @@ class Chip extends \Opencart\System\Engine\Model {
 
 		$result = json_decode($response, true);
 		if (!$result) {
+			$this->last_error_code = 'invalid_response';
 			return null;
 		}
 
-		if (!empty($result['errors'])) {
+		// Failures arrive under `__all__`; older responses used `errors`.
+		// Neither may be returned as though it were a successful body, and the
+		// code must survive so the caller can tell a dead token from a decline.
+		$error_code = $this->extractErrorCode($result);
+
+		if ($error_code !== '') {
+			$this->last_error_code = $error_code;
 			return null;
 		}
 

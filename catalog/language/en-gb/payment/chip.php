@@ -32,5 +32,6 @@ $_['text_renewal_success'] = 'Subscription renewed. Payment: ';
 $_['text_renewal_failed'] = 'Subscription renewal failed.';
 $_['text_renewal_retry'] = 'Next attempt: ';
 $_['text_renewal_suspended'] = 'Subscription suspended after repeated failed renewals. The customer must update their card.';
+$_['text_renewal_token_dead'] = 'Subscription suspended: the saved card token is no longer valid. The customer must enter a new card.';
 $_['error_renewal_purchase'] = 'could not create a renewal purchase.';
 $_['error_renewal_charge'] = 'the charge was declined.';

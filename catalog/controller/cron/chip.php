@@ -124,7 +124,14 @@ class Chip extends \Opencart\System\Engine\Controller {
 	 */
 	private function chargeSubscription(array $subscription, $store): bool {
 		$order_id        = (int)$subscription['order_id'];
-		$due_date        = $subscription['date_next'];
+		/*
+		 * `date_next` may hold a retry time left by the previous attempt
+		 * rather than the date this cycle was due: claimSubscription() and
+		 * recordSubscriptionFailure() both rewrite the column. Recover the real
+		 * due date first, so the 1/3/5 retry ladder is measured from it and the
+		 * claim below advances the billing schedule from it too.
+		 */
+		$due_date        = $this->model_extension_chip_payment_chip->ladderAnchor($subscription['date_next'], (int)$subscription['retry_count']);
 		$frequency       = $subscription['recurring_frequency'];
 		$cycle           = (int)$subscription['recurring_cycle'];
 		$duration        = (int)$subscription['recurring_duration'];
@@ -260,7 +267,31 @@ class Chip extends \Opencart\System\Engine\Controller {
 	 * @return bool Always false.
 	 */
 	private function failSubscription($subscription, $due_date, $retry_count, $reason, $store): bool {
-		$next_retry = $this->model_extension_chip_payment_chip->nextRetryAt($due_date, $retry_count);
+$next_retry = $this->model_extension_chip_payment_chip->nextRetryAt($due_date, $retry_count);
+
+		$error_code = (string)$this->model_extension_chip_payment_chip->getLastErrorCode();
+
+		/*
+		 * A dead or revoked token can never succeed. CHIP documents
+		 * `invalid_recurring_token` as "do not retry, re-prompt the buyer for a new
+		 * card", so suspend now instead of spending the whole ladder on a charge
+		 * that is guaranteed to fail.
+		 */
+		if ($error_code === 'invalid_recurring_token') {
+			$this->model_extension_chip_payment_chip->recordSubscriptionFailure(
+				(int)$subscription['chip_subscription_id'], '0000-00-00 00:00:00', $retry_count + 1, 'suspended');
+
+			$this->addOrderHistory(
+				$store,
+				(int)$subscription['order_id'],
+				$this->config->get('payment_chip_failed_order_status_id'),
+				$this->language->get('text_renewal_token_dead'),
+				true
+			);
+
+			return false;
+		}
+
 
 		if ($next_retry === null) {
 			/*
