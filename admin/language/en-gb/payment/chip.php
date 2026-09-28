@@ -21,6 +21,7 @@ $_['tab_checkout'] = 'Customize checkout';
 $_['tab_troubleshoot'] = 'Troubleshoot';
 $_['tab_report'] = 'Report';
 $_['tab_token'] = 'Token';
+$_['tab_subscription'] = 'Subscriptions';
 
 $_['behavior_missing_order'] = 'Missing Order';
 $_['behavior_cancel_order'] = 'Cancel Order';
@@ -45,6 +46,8 @@ $_['entry_time_zone'] = 'Time Zone';
 $_['entry_debug'] = 'Debug logging';
 $_['entry_convert_to_processing'] = 'Convert To Processing';
 $_['entry_payment_method_whitelist'] = 'Payment Method Whitelist';
+$_['entry_cron_url'] = 'Subscription Cron URL';
+$_['entry_active_subscriptions'] = 'Active Subscriptions';
 $_['entry_disable_success_redirect'] = 'Disable Success Redirect';
 $_['entry_disable_success_callback'] = 'Disable Success Callback';
 $_['entry_canceled_behavior'] = 'Canceled Order Behavior';
@@ -72,6 +75,7 @@ $_['help_disable_success_redirect'] = 'Default to No. Only tick yes if you are p
 $_['help_disable_success_callback'] = 'Default to No. Only tick yes if you are performing a test';
 $_['help_canceled_behavior'] = 'Missing Order is the default behavior. If you require the order status to be updated to canceled, change to Cancel Order';
 $_['help_failed_behavior'] = 'Missing Order is the default behavior. If you require the order status to be updated to failed, change to Fail Order';
+$_['help_cron_url'] = 'CHIP does not auto-renew subscriptions. Renewals run through OpenCart\'s own subscription cron - point your server cron at this URL (e.g. every 5 minutes).';
 
 $_['error_permission'] = 'Warning: You do not have permission to modify CHIP!';
 $_['error_secret_key'] = 'Error! You are required to set CHIP Secret Key';

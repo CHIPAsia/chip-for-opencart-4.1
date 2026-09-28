@@ -120,6 +120,18 @@ class Chip extends \Opencart\System\Engine\Controller {
 			);
 		}
 
+		/*
+		 * Subscription cart: ask CHIP for a recurring token, card only.
+		 *
+		 * Deliberately overrides the merchant whitelist above - CHIP issues
+		 * recurring tokens for card payments only, and leaving a non-card
+		 * method in the list would let the customer pick a method that cannot
+		 * be charged on a cycle later.
+		 */
+		foreach ($this->model_extension_chip_payment_chip->recurringPurchaseParams() as $recurring_key => $recurring_value) {
+			$params[$recurring_key] = $recurring_value;
+		}
+
 		foreach ($products as $product) {
 			$product_price = $this->currency->convert($product['price'], $this->config->get('config_currency'), 'MYR');
 
@@ -228,6 +240,10 @@ class Chip extends \Opencart\System\Engine\Controller {
 			$this->response->setOutput(json_encode($json));
 			return;
 		}
+
+		// Persist any subscription plan before the customer leaves for CHIP.
+		// The cart is gone by the time the callback fires.
+		$this->saveSubscriptionPlan((int)$this->session->data['order_id']);
 
 		// Save to chip_report table
 		$customer_id = $order_info['customer_id'];
@@ -361,6 +377,18 @@ class Chip extends \Opencart\System\Engine\Controller {
 			);
 		}
 
+		/*
+		 * Subscription cart: ask CHIP for a recurring token, card only.
+		 *
+		 * Deliberately overrides the merchant whitelist above - CHIP issues
+		 * recurring tokens for card payments only, and leaving a non-card
+		 * method in the list would let the customer pick a method that cannot
+		 * be charged on a cycle later.
+		 */
+		foreach ($this->model_extension_chip_payment_chip->recurringPurchaseParams() as $recurring_key => $recurring_value) {
+			$params[$recurring_key] = $recurring_value;
+		}
+
 		foreach ($products as $product) {
 			$product_price = $this->currency->convert($product['price'], $this->config->get('config_currency'), 'MYR');
 
@@ -487,6 +515,10 @@ class Chip extends \Opencart\System\Engine\Controller {
 			'environment_type' => $environment_type
 		));
 
+		// Persist any subscription plan before the customer leaves for CHIP.
+		// The cart is gone by the time the callback fires.
+		$this->saveSubscriptionPlan((int)$this->session->data['order_id']);
+
 		// Get token data from database
 		$token_data = $this->model_extension_chip_payment_chip->getTokenByChipTokenId((int)$chip_token_id);
 
@@ -554,6 +586,9 @@ class Chip extends \Opencart\System\Engine\Controller {
 			$this->saveToken($purchase, $order_info['customer_id']);
 		}
 
+		// Attach the recurring token so the renewal cron can charge it.
+		$this->attachSubscriptionToken($purchase, $order_info, $this->model_extension_chip_payment_chip);
+
 		$this->db->query("SELECT RELEASE_LOCK('payment_chip_payment_$purchase_id');");
 
 		exit;
@@ -619,6 +654,9 @@ class Chip extends \Opencart\System\Engine\Controller {
 		if (isset($purchase['is_recurring_token']) && $purchase['is_recurring_token'] === true) {
 			$this->saveToken($purchase, $order_info['customer_id']);
 		}
+
+		// Attach the recurring token so the renewal cron can charge it.
+		$this->attachSubscriptionToken($purchase, $order_info, $this->model_extension_chip_payment_chip);
 
 		$this->db->query("SELECT RELEASE_LOCK('payment_chip_payment_$purchase_id');");
 
@@ -721,5 +759,122 @@ class Chip extends \Opencart\System\Engine\Controller {
 		);
 
 		$this->model_extension_chip_payment_chip->addToken($token_data);
+	}
+
+	/**
+	 * Record the subscription plans in the cart before the customer is sent to CHIP.
+	 *
+	 * The cart is gone by the time the callback fires, so the plan has to be
+	 * persisted here. The row starts as `pending` and only becomes `active`
+	 * once a recurring token exists - a pending row is never charged.
+	 */
+	private function saveSubscriptionPlan(int $order_id): void {
+		$this->load->model('extension/chip/payment/chip');
+
+		if (!$this->model_extension_chip_payment_chip->cartHasSubscription()) {
+			return;
+		}
+
+		$this->load->model('checkout/order');
+
+		$order_info = $this->model_checkout_order->getOrder($order_id);
+
+		if (!$order_info) {
+			return;
+		}
+
+		foreach ($this->cart->getProducts() as $product) {
+			if (empty($product['subscription'])) {
+				continue;
+			}
+
+			$this->saveSubscriptionPlanForProduct($order_info, $product['subscription'], $product);
+		}
+	}
+
+	/**
+	 * Persist one cart line's subscription plan.
+	 *
+	 * @param array $plan    The cart line's `subscription` array.
+	 * @param array $product The cart line.
+	 */
+	private function saveSubscriptionPlanForProduct(array $order_info, array $plan, array $product): void {
+		$duration  = (int)$plan['duration'];
+		$trial     = (int)$plan['trial_status'];
+		$trial_len = (int)$plan['trial_duration'];
+
+		/*
+		 * The first cycle follows the trial schedule when the plan has a trial,
+		 * otherwise the normal recurring schedule.
+		 */
+		if ($trial === 1 && $trial_len > 0) {
+			$first_frequency = (string)$plan['trial_frequency'];
+			$first_cycle     = (int)$plan['trial_cycle'];
+		} else {
+			$first_frequency = (string)$plan['frequency'];
+			$first_cycle     = (int)$plan['cycle'];
+		}
+
+		$next = $this->model_extension_chip_payment_chip->nextCycleDate(date('Y-m-d H:i:s'), $first_frequency, $first_cycle);
+
+		if ($next === null) {
+			return;
+		}
+
+		$this->model_extension_chip_payment_chip->addSubscription([
+			'order_id'            => (int)$order_info['order_id'],
+			'order_recurring_id'  => (int)$plan['subscription_plan_id'],
+			'customer_id'         => (int)$order_info['customer_id'],
+			'customer_email'      => (string)$order_info['email'],
+			'chip_token_id'       => 0,
+			'recurring_token'     => '',
+			'product_name'        => (string)$product['name'],
+			'product_quantity'    => (int)$product['quantity'],
+			'recurring_frequency' => (string)$plan['frequency'],
+			'recurring_cycle'     => (int)$plan['cycle'],
+			'recurring_duration'  => $duration,
+			'recurring_price'     => (float)$plan['price'],
+			'trial_price'         => (float)$plan['trial_price'],
+			'trial_cycle'         => (int)$plan['trial_cycle'],
+			'trial_frequency'     => (string)$plan['trial_frequency'],
+			'trial_duration'      => $trial_len,
+			'remaining'           => $duration,
+			'trial_remaining'     => ($trial === 1 ? $trial_len : 0),
+			'status'              => 'pending',
+			'date_next'           => $next,
+			'date_last_charge'    => '0000-00-00 00:00:00',
+			'retry_count'         => 0
+		]);
+	}
+
+	/**
+	 * Attach the recurring token once a recurring purchase is paid.
+	 *
+	 * The token is the purchase id. Until this runs the subscription stays
+	 * `pending` and the cron ignores it, so a plan that never completed payment
+	 * can never be charged.
+	 *
+	 * @param array $purchase   Paid CHIP purchase.
+	 * @param array $order_info Order row.
+	 * @param mixed $model      Loaded CHIP payment model.
+	 */
+	private function attachSubscriptionToken(array $purchase, array $order_info, $model): void {
+		if (!isset($purchase['is_recurring_token']) || $purchase['is_recurring_token'] !== true) {
+			return;
+		}
+
+		$subscriptions = $model->getSubscriptionsByOrderId((int)$order_info['order_id']);
+
+		if (!$subscriptions) {
+			return;
+		}
+
+		foreach ($subscriptions as $subscription) {
+			$model->activateSubscription(
+				(int)$subscription['chip_subscription_id'],
+				(string)$purchase['id'],
+				$model->findTokenIdByPurchase((string)$purchase['id'])
+			);
+		}
 	}
 }

@@ -38,11 +38,46 @@ class Chip extends \Opencart\System\Engine\Model {
 				KEY `customer_id` (`customer_id`)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 		");
+
+		$this->db->query("
+			CREATE TABLE IF NOT EXISTS `" . DB_PREFIX . "chip_subscription` (
+				`chip_subscription_id` bigint(20) NOT NULL AUTO_INCREMENT,
+				`order_id` bigint(20) NOT NULL,
+				`order_recurring_id` bigint(20) NOT NULL,
+				`customer_id` bigint(20) NOT NULL,
+				`customer_email` varchar(96) NOT NULL,
+				`chip_token_id` bigint(20) NOT NULL,
+				`recurring_token` varchar(64) NOT NULL,
+				`product_name` varchar(255) NOT NULL,
+				`product_quantity` int(11) NOT NULL,
+				`recurring_frequency` varchar(25) NOT NULL,
+				`recurring_cycle` smallint(6) NOT NULL,
+				`recurring_duration` smallint(6) NOT NULL,
+				`recurring_price` decimal(15,2) NOT NULL,
+				`trial_price` decimal(15,2) NOT NULL,
+				`trial_cycle` smallint(6) NOT NULL,
+				`trial_frequency` varchar(25) NOT NULL,
+				`trial_duration` smallint(6) NOT NULL,
+				`remaining` smallint(6) NOT NULL,
+				`trial_remaining` smallint(6) NOT NULL,
+				`status` varchar(32) NOT NULL,
+				`date_next` datetime NOT NULL,
+				`date_last_charge` datetime NOT NULL,
+				`retry_count` smallint(6) NOT NULL,
+				`date_added` datetime NOT NULL,
+				`date_modified` datetime NOT NULL,
+				PRIMARY KEY (`chip_subscription_id`),
+				KEY `order_id` (`order_id`),
+				KEY `customer_id` (`customer_id`),
+				KEY `status_date_next` (`status`, `date_next`)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+		");
 	}
 
 	public function uninstall() {
 		$this->db->query("DROP TABLE IF EXISTS `" . DB_PREFIX . "chip_report`");
 		$this->db->query("DROP TABLE IF EXISTS `" . DB_PREFIX . "chip_token`");
+		$this->db->query("DROP TABLE IF EXISTS `" . DB_PREFIX . "chip_subscription`");
 	}
 
 	public function set_keys($private_key, $brand_id) {

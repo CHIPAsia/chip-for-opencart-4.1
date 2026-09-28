@@ -26,3 +26,11 @@ $_['text_amex'] = 'American Express';
 $_['text_discover'] = 'Discover';
 $_['text_jcb'] = 'JCB';
 $_['text_maestro'] = 'Maestro';
+
+// Subscription renewals (driven by OpenCart's own subscription cron).
+$_['text_renewal_success'] = 'Subscription renewed. Payment: ';
+$_['text_renewal_failed'] = 'Subscription renewal failed.';
+$_['text_renewal_retry'] = 'Next attempt: ';
+$_['text_renewal_suspended'] = 'Subscription suspended after repeated failed renewals. The customer must update their card.';
+$_['error_renewal_purchase'] = 'could not create a renewal purchase.';
+$_['error_renewal_charge'] = 'the charge was declined.';
