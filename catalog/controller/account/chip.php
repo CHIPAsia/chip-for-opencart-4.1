@@ -232,7 +232,7 @@ class Chip extends \Opencart\System\Engine\Controller {
 		$purchase = $this->model_extension_chip_payment_chip->createPurchase($params);
 
 		// Check if purchase creation was successful
-		if (!array_key_exists('id', $purchase)) {
+		if ( !is_array($purchase) || !array_key_exists('id', $purchase) ) {
 			$this->response->redirect($this->url->link('account/payment_method', 'language=' . $this->config->get('config_language') . '&error=' . urlencode('Failed to create payment method')));
 			return;
 		}
@@ -266,7 +266,7 @@ class Chip extends \Opencart\System\Engine\Controller {
 		$this->model_extension_chip_payment_chip->setKeys($this->config->get('payment_chip_secret_key'), '');
 		$purchase = $this->model_extension_chip_payment_chip->getPurchase($purchase_id);
 
-		if (!array_key_exists('id', $purchase)) {
+		if ( !is_array($purchase) || !array_key_exists('id', $purchase) ) {
 			if ($this->config->get('payment_chip_debug')) {
 				$this->log->write('CHIP API /purchase/' . $purchase_id . '/ failed in add card flow. Response Body: ' . json_encode($purchase));
 			}

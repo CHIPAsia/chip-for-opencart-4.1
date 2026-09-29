@@ -155,6 +155,15 @@ class Chip extends \Opencart\System\Engine\Controller {
 		$data['payment_chip_canceled_behavior'] = $this->config->get('payment_chip_canceled_behavior');
 		$data['payment_chip_failed_behavior'] = $this->config->get('payment_chip_failed_behavior');
 
+		/*
+		 * Renewals are driven by OpenCart's own subscription cron, so all the
+		 * merchant has to do is point their server cron at OpenCart's built-in
+		 * cron entry point. Surfacing the URL (and the active subscription
+		 * count) makes that discoverable instead of a support ticket.
+		 */
+		$data['cron_url'] = HTTP_CATALOG . 'index.php?route=cron/cron';
+		$data['subscription_total'] = $this->getSubscriptionTotal();
+
 		$data['report'] = $this->getReport();
 		$data['token'] = $this->getToken();
 
@@ -241,6 +250,15 @@ class Chip extends \Opencart\System\Engine\Controller {
 
 		$this->request->post['payment_chip_general_public_key'] = $general_public_key;
 		return true;
+	}
+
+	/**
+	 * Total number of active CHIP subscriptions, for the settings page notice.
+	 */
+	public function getSubscriptionTotal(): int {
+		$query = $this->db->query("SELECT COUNT(*) AS `total` FROM `" . DB_PREFIX . "chip_subscription` WHERE `status` = 'active'");
+
+		return (int)$query->row['total'];
 	}
 
 	public function getReport(): string {

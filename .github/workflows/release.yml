@@ -14,6 +14,12 @@ jobs:
       
       - name: Create zip file
         run: |
+          # The name MUST stay chip.ocmod.zip. Beyond the .ocmod.zip suffix that
+          # core requires of every upload (marketplace/installer.php checks
+          # substr($filename, -10)), 4.x stores basename($filename, '.ocmod.zip')
+          # as the extension CODE. Code is both the extraction folder and the
+          # route prefix, and this module's routes are extension/chip/..., so a
+          # renamed file would install where no route can reach it.
           zip -r chip.ocmod.zip \
             admin/ \
             catalog/ \
