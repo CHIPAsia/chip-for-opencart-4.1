@@ -1,5 +1,9 @@
 <?php
 namespace Opencart\Catalog\Controller\Extension\Chip\Cron;
+// Version reported to the gateway. Keep in step with install.json.
+if (!defined('CHIP_OPENCART_VERSION')) {
+	define('CHIP_OPENCART_VERSION', '1.2.0');
+}
 
 /**
  * Class Chip
@@ -194,7 +198,7 @@ class Chip extends \Opencart\System\Engine\Controller {
 		$params = [
 			'reference'       => $order_id,
 			'platform'        => 'opencart',
-			'creator_agent'   => 'OC41: 1.0.0',
+			'creator_agent'   => 'OC41: ' . CHIP_OPENCART_VERSION,
 			'brand_id'        => $this->config->get('payment_chip_brand_id'),
 			'client'          => [
 				'email' => $subscription['customer_email']
