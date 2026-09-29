@@ -223,6 +223,39 @@ class Chip extends \Opencart\System\Engine\Controller {
 
 		$charge = $this->model_extension_chip_payment_chip->chargeRecurring($purchase['id'], $subscription['recurring_token']);
 
+		/*
+		 * An unresolved charge is NOT a failure.
+		 *
+		 * CHIP answers HTTP 200 with `status = 'pending_charge'` when the
+		 * acquirer has not finalised, and follows up with a `purchase.paid`
+		 * or `purchase.payment_failed` callback. Treating that as a decline
+		 * walked the retry ladder and re-charged on the next step while the
+		 * first charge was still settling - a double-charge window.
+		 *
+		 * So: do not start a second charge. Leave the billing date that
+		 * claimSubscription() already advanced (this row is therefore not
+		 * due again in this window), keep the retry ladder untouched since
+		 * nothing failed, and do not consume a cycle.
+		 */
+		if (is_array($charge) && isset($charge['status']) && $charge['status'] === 'pending_charge') {
+			/*
+			 * Logged against the order's CURRENT status, not a paid or failed
+			 * one: a pending charge has resolved to neither, and flipping the
+			 * order either way would misreport it to the merchant.
+			 */
+			$this->load->model('checkout/order');
+
+			$order_info = $this->model_checkout_order->getOrder($subscription['order_id']);
+
+			$order_status_id = isset($order_info['order_status_id']) ? (int)$order_info['order_status_id'] : 0;
+
+			if ($order_status_id) {
+				$this->addOrderHistory($store, (int)$subscription['order_id'], $order_status_id, $this->language->get('text_renewal_pending'), false);
+			}
+
+			return false;
+		}
+
 		if (!is_array($charge) || !isset($charge['status']) || $charge['status'] !== 'paid') {
 			return $this->failSubscription($subscription, $due_date, $retry_count, $this->language->get('error_renewal_charge'), $store);
 		}
