@@ -84,6 +84,29 @@ class Chip extends \Opencart\System\Engine\Controller {
 			}
 
 			/*
+			 * Re-read the row now that the lock is held, and re-check that it is
+			 * still ours to bill. The due-list was read BEFORE the lock, so a run
+			 * that lost the race would otherwise charge this stale snapshot: both
+			 * runs pass the "is it due" test, both take the lock in turn, and the
+			 * customer is billed twice for one billing period.
+			 */
+			$fresh = $this->model_extension_chip_payment_chip->getSubscription(
+				(int)$subscription['chip_subscription_id']);
+
+			if (!$fresh
+				|| $fresh['status'] !== 'active'
+				|| $fresh['date_next'] === '0000-00-00 00:00:00'
+				|| $fresh['date_next'] !== $subscription['date_next']) {
+				// Already billed by the run that beat us to the lock, or no longer
+				// due. Release and skip rather than charge again.
+				$this->db->query("SELECT RELEASE_LOCK('" . $lock . "');");
+				continue;
+			}
+
+			// Bill the fresh row, never the snapshot the due-list handed us.
+			$subscription = $fresh;
+
+			/*
 			 * Core's cron owns the order id, not us. When the row records one
 			 * (a plan saved against a manually created order) use it; otherwise
 			 * this is the renewal order core just created for this pass.
