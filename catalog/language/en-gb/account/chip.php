@@ -44,9 +44,23 @@ $_['text_maestro']             = 'Maestro';
 // Error
 $_['error_logged']             = 'You must be logged in to access this page.';
 $_['error_token']              = 'The stored card could not be found.';
+$_['error_subscription']       = 'That subscription could not be found, or it no longer needs recovering.';
+$_['error_purchase']           = 'We could not start the payment. Please try again.';
+$_['error_charge_failed']      = 'That card was declined. Please try another card.';
+
 $_['error_card_name']          = 'Cardholder name is required.';
 $_['error_card_type']          = 'Card type is required.';
 $_['error_card_number']        = 'Card number is required.';
 $_['error_card_expired']       = 'The card has expired.';
 $_['error_card_cvv']           = 'CVV is required.';
+
+// Recovery - a subscription whose renewal failed and is suspended
+$_['heading_recovery']         = 'Subscriptions that need a new card';
+$_['text_recovery_intro']      = 'The card on these subscriptions was declined, so they have been paused. Pay the amount due with a saved card or a new one to start them again.';
+$_['text_recovery_amount']     = 'Amount due';
+$_['text_recovery_due']        = 'Paused since';
+$_['text_pay_saved_card']      = 'Pay with a saved card';
+$_['text_pay_new_card']        = 'Pay with a new card';
+$_['text_recovered']           = 'Success: your subscription is active again.';
+$_['text_choose_card']         = '--- Choose a card ---';
 

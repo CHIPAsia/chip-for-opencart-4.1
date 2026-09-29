@@ -92,7 +92,9 @@ class Chip extends \Opencart\System\Engine\Controller {
 
 		$this->load->model('extension/chip/payment/chip');
 
-		$results = $this->model_extension_chip_payment_chip->getTokens($this->customer->getId());
+		$customer_id = (int)$this->customer->getId();
+
+		$results = $this->model_extension_chip_payment_chip->getTokens($customer_id);
 
 		foreach ($results as $result) {
 			$data['credit_cards'][] = [
@@ -107,6 +109,41 @@ class Chip extends \Opencart\System\Engine\Controller {
 			] + $result;
 		}
 
+		/*
+		 * Suspended plans, so the buyer can actually recover them.
+		 *
+		 * A suspended row is never billed again and the cron will not touch it,
+		 * so without this list the only thing telling the customer their plan
+		 * died is an order-history comment - with nothing to click. Both the
+		 * saved-card list and the new-card action are offered here because
+		 * either can be the one that works: the saved card may simply have been
+		 * replaced, or the plan may need a card that has not been declined.
+		 */
+		$data['recoverable'] = [];
+
+		foreach ($this->model_extension_chip_payment_chip->getRecoverableSubscriptions($customer_id) as $sub) {
+			$amount = $this->model_extension_chip_payment_chip->currentCycleAmount($sub);
+
+			$data['recoverable'][] = [
+				'chip_subscription_id' => (int)$sub['chip_subscription_id'],
+				'product_name'         => $sub['product_name'],
+				'amount'               => $this->currency->format($amount['price'] / 100, 'MYR'),
+				'paused_since'         => ($sub['date_modified'] === '0000-00-00 00:00:00') ? '' : date('d/m/Y', strtotime($sub['date_modified'])),
+				/*
+				 * Deliberately no per-row "reason".
+				 *
+				 * The row does not record why it suspended: `retry_count` is
+				 * incremented both by a declined card walking the ladder and by
+				 * a dead token, so the column cannot tell them apart and any
+				 * label derived from it would be a guess shown to the buyer as
+				 * fact. The shared intro states what is certainly true - the
+				 * card must be replaced - and the buyer's own card list tells
+				 * them which one is dead.
+				 */
+				'pay_new_card'         => $this->url->link('extension/chip/account/chip.recover_with_new_card', 'language=' . $this->config->get('config_language') . '&customer_token=' . $this->session->data['customer_token'] . '&chip_subscription_id=' . $sub['chip_subscription_id'])
+			];
+		}
+
 		$data['button_delete'] = $this->language->get('button_delete');
 		$data['button_add'] = $this->language->get('button_add');
 		$data['text_confirm'] = $this->language->get('text_confirm');
@@ -115,6 +152,17 @@ class Chip extends \Opencart\System\Engine\Controller {
 		$data['column_date_expire'] = $this->language->get('column_date_expire');
 		$data['column_action'] = $this->language->get('column_action');
 		$data['add_card_url'] = $this->url->link('extension/chip/account/chip.create_payment_method', 'language=' . $this->config->get('config_language') . '&customer_token=' . $this->session->data['customer_token']);
+
+		$data['heading_recovery'] = $this->language->get('heading_recovery');
+		$data['text_recovery_intro'] = $this->language->get('text_recovery_intro');
+		$data['text_recovery_amount'] = $this->language->get('text_recovery_amount');
+		$data['text_recovery_due'] = $this->language->get('text_recovery_due');
+		$data['text_recovery_reason'] = $this->language->get('text_recovery_reason');
+		$data['text_pay_saved_card'] = $this->language->get('text_pay_saved_card');
+		$data['text_pay_new_card'] = $this->language->get('text_pay_new_card');
+		$data['text_choose_card'] = $this->language->get('text_choose_card');
+		$data['text_recovered'] = $this->language->get('text_recovered');
+		$data['recover_url'] = $this->url->link('extension/chip/account/chip.recover_with_stored_card', 'language=' . $this->config->get('config_language') . '&customer_token=' . $this->session->data['customer_token'], true);
 
 		return $this->load->view('extension/chip/account/chip_list', $data);
 	}
@@ -178,6 +226,232 @@ class Chip extends \Opencart\System\Engine\Controller {
 
 		$this->response->addHeader('Content-Type: application/json');
 		$this->response->setOutput(json_encode($json));
+	}
+
+	/**
+	 * Recover a suspended subscription by paying with a NEW card.
+	 *
+	 * Mirrors the add-card flow, but the purchase carries `reference` = the
+	 * SUBSCRIPTION id, so the paid callback can find the plan. The add-card
+	 * flow cannot do this: it sends the customer id as the reference, so
+	 * `attachSubscriptionToken()` (which looks rows up by order id) never sees
+	 * the subscription - the new card lands in the wallet and the plan stays
+	 * suspended forever.
+	 *
+	 * @return void
+	 */
+	public function recover_with_new_card(): void {
+		$this->load->language('extension/chip/account/chip');
+		$this->load->model('extension/chip/payment/chip');
+		$this->load->model('account/customer');
+
+		$chip_subscription_id = isset($this->request->get['chip_subscription_id'])
+			? (int)$this->request->get['chip_subscription_id'] : 0;
+
+		$subscription = $this->model_extension_chip_payment_chip->getSubscriptionForCustomer(
+			$chip_subscription_id, (int)$this->customer->getId());
+
+		if (!$subscription || $subscription['status'] !== 'suspended') {
+			$this->response->redirect($this->recoverUrl('error_subscription'));
+
+			return;
+		}
+
+		$customer = $this->model_account_customer->getCustomer($this->customer->getId());
+
+		$amount = $this->model_extension_chip_payment_chip->currentCycleAmount($subscription);
+
+		$params = [
+			'success_callback' => $this->url->link('extension/chip/payment/chip|success_callback'),
+			/*
+			 * Back to the card page, not `success_redirect`.
+			 *
+			 * `success_redirect()` requires an `oc_chip_report` row for the
+			 * order, and this recovery purchase has none (no checkout wrote
+			 * one) - so it would exit with 'invalid_redirect' and the buyer
+			 * would be stranded on a blank page after paying. The re-arm itself
+			 * happens on the signed callback, not here.
+			 */
+			'success_redirect' => $this->recoverUrl(),
+			'failure_redirect' => $this->recoverUrl(),
+			'cancel_redirect'  => $this->recoverUrl(),
+			'creator_agent'    => 'OC40: ' . CHIP_OPENCART_VERSION,
+			/*
+			 * The ORDER id, not the subscription id.
+			 *
+			 * `success_callback()` resolves the reference with
+			 * `getOrder($purchase['reference'])` and `attachSubscriptionToken()`
+			 * then looks the plan up with `getSubscriptionsByOrderId()` - so the
+			 * reference must be the order. Sending the subscription id here
+			 * would make the callback fetch a non-existent order and the plan
+			 * would stay suspended. This is the one route already proven to
+			 * re-arm a suspended row.
+			 */
+			'reference'        => (int)$subscription['order_id'],
+			'platform'         => 'opencart',
+			'brand_id'         => $this->config->get('payment_chip_brand_id'),
+			'client'           => [
+				'email'     => $customer['email'] ?? $subscription['customer_email'],
+				'full_name' => trim(($customer['firstname'] ?? '') . ' ' . ($customer['lastname'] ?? ''))
+			],
+			'purchase'         => [
+				'timezone'   => $this->config->get('payment_chip_time_zone'),
+				'currency'   => 'MYR',
+				'products'   => [[
+					'name'     => substr((string)$subscription['product_name'], 0, 256),
+					'quantity' => max(1, (int)$subscription['product_quantity']),
+					'price'    => $amount['price']
+				]]
+			],
+			'force_recurring'  => true
+		];
+
+		$this->model_extension_chip_payment_chip->set_keys($this->config->get('payment_chip_secret_key'), '');
+
+		$purchase = $this->model_extension_chip_payment_chip->create_purchase($params);
+
+		if (!is_array($purchase) || !array_key_exists('id', $purchase)) {
+			$this->response->redirect($this->recoverUrl('error_purchase'));
+
+			return;
+		}
+
+		$this->session->data['chip_recover_subscription_id'] = $chip_subscription_id;
+
+		$this->response->redirect($purchase['checkout_url']);
+	}
+
+	/**
+	 * Recover a suspended subscription by charging a STORED card.
+	 *
+	 * The buyer picks a card they already tokenised, so no gateway redirect is
+	 * needed: the stored token is charged directly and, only on success, the
+	 * plan is switched over to it and re-armed. A failed charge changes
+	 * nothing - the plan stays suspended on its previous card.
+	 *
+	 * @return void
+	 */
+	public function recover_with_stored_card(): void {
+		$this->load->language('extension/chip/account/chip');
+		$this->load->model('extension/chip/payment/chip');
+
+		$json = [];
+
+		if (!$this->customer->isLogged()) {
+			$json['error'] = $this->language->get('error_logged');
+		}
+
+		$chip_subscription_id = isset($this->request->post['chip_subscription_id'])
+			? (int)$this->request->post['chip_subscription_id'] : 0;
+		$chip_token_id = isset($this->request->post['chip_token_id'])
+			? (int)$this->request->post['chip_token_id'] : 0;
+
+		$customer_id = (int)$this->customer->getId();
+
+		$subscription = $this->model_extension_chip_payment_chip->getSubscriptionForCustomer(
+			$chip_subscription_id, $customer_id);
+
+		if (!$subscription || $subscription['status'] !== 'suspended') {
+			$json['error'] = $this->language->get('error_subscription');
+		}
+
+		$token = $this->model_extension_chip_payment_chip->getToken($customer_id, $chip_token_id);
+
+		if (!$token) {
+			$json['error'] = $this->language->get('error_token');
+		}
+
+		if ($json) {
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode($json));
+
+			return;
+		}
+
+		$amount = $this->model_extension_chip_payment_chip->currentCycleAmount($subscription);
+
+		$params = [
+			'reference'      => (int)$subscription['order_id'],
+			'platform'       => 'opencart',
+			'creator_agent'  => 'OC40: ' . CHIP_OPENCART_VERSION,
+			'brand_id'       => $this->config->get('payment_chip_brand_id'),
+			'client'         => ['email' => $subscription['customer_email']],
+			'purchase'       => [
+				'timezone' => $this->config->get('payment_chip_time_zone'),
+				'currency' => 'MYR',
+				'products' => [[
+					'name'     => substr((string)$subscription['product_name'], 0, 256),
+					'quantity' => max(1, (int)$subscription['product_quantity']),
+					'price'    => $amount['price']
+				]]
+			]
+		];
+
+		$this->model_extension_chip_payment_chip->set_keys($this->config->get('payment_chip_secret_key'), '');
+
+		$purchase = $this->model_extension_chip_payment_chip->create_purchase($params);
+
+		if (!is_array($purchase) || !array_key_exists('id', $purchase)) {
+			$json['error'] = $this->language->get('error_purchase');
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode($json));
+
+			return;
+		}
+
+		$charge = $this->model_extension_chip_payment_chip->chargeRecurring(
+			(string)$purchase['id'], (string)$token['token_id']);
+
+		/*
+		 * Only a settled, successful charge may change the plan.
+		 *
+		 * `pending_charge` means the acquirer has not finalised - the module
+		 * treats that as unresolved elsewhere rather than a decline, and
+		 * flipping the plan to a token that may still fail would leave it
+		 * active on a card that never paid.
+		 */
+		$status = is_array($charge) && isset($charge['status']) ? (string)$charge['status'] : '';
+
+		if ($status !== 'paid') {
+			$json['error'] = $this->language->get('error_charge_failed');
+
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode($json));
+
+			return;
+		}
+
+		$rearm = $this->model_extension_chip_payment_chip->rearmSubscription($subscription);
+
+		$this->model_extension_chip_payment_chip->activateSubscription(
+			$chip_subscription_id,
+			(string)$token['token_id'],
+			(int)$token['chip_token_id'],
+			$rearm
+		);
+
+		$json['success'] = $this->language->get('text_recovered');
+
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->setOutput(json_encode($json));
+	}
+
+	/**
+	 * Build a recovery redirect back to the card page.
+	 *
+	 * @param string $error Optional language key to surface.
+	 *
+	 * @return string
+	 */
+	private function recoverUrl(string $error = ''): string {
+		$url = 'extension/chip/account/chip&language=' . $this->config->get('config_language')
+			. '&customer_token=' . $this->session->data['customer_token'];
+
+		if ($error !== '') {
+			$url .= '&error=' . urlencode($this->language->get($error));
+		}
+
+		return $this->url->link($url, '', true);
 	}
 
 	/**

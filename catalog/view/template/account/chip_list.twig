@@ -32,3 +32,104 @@
     </tfoot>
   </table>
 </div>
+{% if recoverable %}
+<hr/>
+<h3>{{ heading_recovery }}</h3>
+<p>{{ text_recovery_intro }}</p>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-hover">
+    <thead>
+      <tr>
+        <th>{{ column_credit_card }}</th>
+        <th>{{ text_recovery_amount }}</th>
+        <th>{{ text_recovery_due }}</th>
+        <th class="text-end">{{ column_action }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sub in recoverable %}
+        <tr>
+          <td>{{ sub.product_name }}</td>
+          <td>{{ sub.amount }}</td>
+          <td>{{ sub.paused_since }}</td>
+          <td class="text-end">
+            {# A saved card can only be charged if there is one on file, so the
+               picker is hidden rather than shown empty. Paying with a new card
+               is always offered, because a dead card is exactly the case this
+               recovery exists for. #}
+            {% if credit_cards %}
+              <div class="input-group mb-2">
+                <select name="chip_token_id" class="form-select" id="chip-token-{{ sub.chip_subscription_id }}">
+                  <option value="">{{ text_choose_card }}</option>
+                  {% for credit_card in credit_cards %}
+                    <option value="{{ credit_card.chip_token_id }}">{{ credit_card.card_type }} {{ credit_card.card_number }}</option>
+                  {% endfor %}
+                </select>
+                <button type="button" class="btn btn-primary recover-stored"
+                        data-subscription="{{ sub.chip_subscription_id }}"
+                        data-select="chip-token-{{ sub.chip_subscription_id }}">{{ text_pay_saved_card }}</button>
+              </div>
+            {% endif %}
+            <a href="{{ sub.pay_new_card }}" class="btn btn-secondary">{{ text_pay_new_card }}</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script type="text/javascript"><!--
+/*
+ * Charge a saved card for a suspended subscription.
+ *
+ * The plan changes ONLY once the charge has settled as paid, so a decline
+ * leaves it exactly as it was - suspended, still on its previous card - and
+ * the buyer can try another card. `pending_charge` is likewise not treated as
+ * success: the plan must not be pointed at a card that has not paid yet.
+ */
+$('.recover-stored').on('click', function (e) {
+    e.preventDefault();
+
+    var element = this;
+    var select = document.getElementById($(element).attr('data-select'));
+
+    if (!select || !select.value) {
+        $('#alert').prepend('<div class="alert alert-danger alert-dismissible"><i class="fa-solid fa-circle-exclamation"></i> {{ text_choose_card }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>');
+
+        return;
+    }
+
+    $.ajax({
+        url: '{{ recover_url }}',
+        type: 'post',
+        data: {
+            chip_subscription_id: $(element).attr('data-subscription'),
+            chip_token_id: select.value
+        },
+        dataType: 'json',
+        beforeSend: function () {
+            $(element).prop('disabled', true);
+        },
+        complete: function () {
+            $(element).prop('disabled', false);
+        },
+        success: function (json) {
+            $('.alert-dismissible').remove();
+
+            if (json['error']) {
+                $('#alert').prepend('<div class="alert alert-danger alert-dismissible"><i class="fa-solid fa-circle-exclamation"></i> ' + json['error'] + ' <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>');
+            }
+
+            if (json['success']) {
+                $('#credit-card').load('index.php?route=extension/chip/account/chip.list&customer_token={{ customer_token }}');
+                $('#alert').prepend('<div class="alert alert-success alert-dismissible"><i class="fa-solid fa-circle-check"></i> ' + json['success'] + ' <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>');
+            }
+        },
+        error: function (xhr, ajaxOptions, thrownError) {
+            console.log(thrownError + "\r\n" + xhr.statusText + "\r\n" + xhr.responseText);
+        }
+    });
+});
+//--></script>
+{% endif %}
