@@ -1,5 +1,9 @@
 <?php
 namespace Opencart\Catalog\Controller\Extension\Chip\Payment;
+// Version reported to the gateway. Keep in step with install.json.
+if (!defined('CHIP_OPENCART_VERSION')) {
+	define('CHIP_OPENCART_VERSION', '1.2.0');
+}
 class Chip extends \Opencart\System\Engine\Controller {
 	public function index(): string {
 		$this->load->language('extension/chip/payment/chip');
@@ -77,7 +81,7 @@ class Chip extends \Opencart\System\Engine\Controller {
 			'success_redirect' => $success_redirect_url,
 			'failure_redirect' => $this->url->link('checkout/checkout', 'language=' . $this->config->get('config_language')),
 			'cancel_redirect'  => $this->url->link('checkout/cart', 'language=' . $this->config->get('config_language')),
-			'creator_agent'    => 'OC41: 1.0.0',
+			'creator_agent'    => 'OC41: ' . CHIP_OPENCART_VERSION,
 			'reference'        => $this->session->data['order_id'],
 			'platform'         => 'opencart',
 			'due'              => time() + (abs( (int) $this->config->get('payment_chip_due_strict_timing') ) * 60),
@@ -334,7 +338,7 @@ class Chip extends \Opencart\System\Engine\Controller {
 			'success_redirect' => $success_redirect_url,
 			'failure_redirect' => $this->url->link('checkout/checkout', 'language=' . $this->config->get('config_language')),
 			'cancel_redirect'  => $this->url->link('checkout/cart', 'language=' . $this->config->get('config_language')),
-			'creator_agent'    => 'OC41: 1.0.0',
+			'creator_agent'    => 'OC41: ' . CHIP_OPENCART_VERSION,
 			'reference'        => $this->session->data['order_id'],
 			'platform'         => 'opencart',
 			'due'              => time() + (abs( (int) $this->config->get('payment_chip_due_strict_timing') ) * 60),
