@@ -16,19 +16,18 @@ points (`getMethod()` and `getMethods()`), so one build covers the whole 4.x lin
 | OpenCart version | Payments | Subscription renewals |
 | --- | --- | --- |
 | **4.1.0.x** | ✅ | ✅ |
-| **4.0.2.x** | ✅ | ❌ |
-| **4.0.0.0 – 4.0.1.1** | ✅ | ❌ |
+| **4.0.2.x** | ✅ | ❌ not wired up |
+| **4.0.0.0 – 4.0.1.1** | ✅ | ❌ not possible |
 
 Payments work across the entire range. OpenCart **4.0.0.0 – 4.0.1.1** calls the
 payment extension through `getMethod()` and **4.0.2.0 and later** call
 `getMethods()`; this module implements both against one shared implementation, so
 checkout succeeds on either without a version-specific download.
 
-**Subscription renewals require OpenCart 4.1.0.0 or later**, for a separate reason:
-renewals are scheduled by OpenCart's own `cron/subscription.php`, which calls the
-payment extension back — and only 4.1.0.0 and later do that. On 4.0.x a customer
-can pay for a subscription product, but nothing will renew it. Upgrade to 4.1.0.x
-if renewals are needed.
+**Subscription renewals require OpenCart 4.1.0.0 or later.** Renewals are driven by
+OpenCart's own scheduler, which calls the payment extension back, and only 4.1.0.0
+and later do that. On 4.0.x a customer can pay for a subscription product, but
+nothing renews it — so if renewals are needed, use 4.1.0.x.
 
 The `4.0` folder in [`chip-for-opencart`](https://github.com/CHIPAsia/chip-for-opencart)
 is no longer required for new installs. Stores already running it keep working.
