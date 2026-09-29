@@ -848,6 +848,34 @@ class Chip extends \Opencart\System\Engine\Controller {
 	}
 
 	/**
+	 * The next charge date for a subscription that is being re-armed.
+	 *
+	 * Mirrors the cron's own step choice: while trial cycles remain the plan
+	 * advances by the trial schedule, otherwise by the recurring one. Computing
+	 * this anywhere else would let the two drift, and a plan that re-arms onto
+	 * the wrong cadence bills the customer on a schedule they never agreed to.
+	 *
+	 * @param array $subscription chip_subscription row.
+	 *
+	 * @return string Date, or '' when the schedule is unusable.
+	 */
+	private function rearmDate($subscription) {
+		if ((int)$subscription['trial_remaining'] > 0) {
+			$frequency = (string)$subscription['trial_frequency'];
+			$cycle     = (int)$subscription['trial_cycle'];
+		} else {
+			$frequency = (string)$subscription['recurring_frequency'];
+			$cycle     = (int)$subscription['recurring_cycle'];
+		}
+
+		$model = $model;
+
+		$next = $model->nextCycleDate(date('Y-m-d H:i:s'), $frequency, $cycle);
+
+		return ($next === null) ? '' : $next;
+	}
+
+	/**
 	 * Attach the recurring token once a recurring purchase is paid.
 	 *
 	 * The token is the purchase id. Until this runs the subscription stays
@@ -870,10 +898,26 @@ class Chip extends \Opencart\System\Engine\Controller {
 		}
 
 		foreach ($subscriptions as $subscription) {
+			/*
+			 * Re-arm a suspended row in the same call.
+			 *
+			 * Suspension zeroes date_next and leaves the retry ladder spent, so
+			 * activating without restoring the schedule leaves a row that
+			 * getDueSubscriptions() can never select again - the subscription
+			 * reads as active and is never billed.
+			 *
+			 * A `pending` row is a plan that has never been paid; its schedule
+			 * was just written by the checkout, so it is left alone.
+			 */
+			$rearm = ($subscription['status'] === 'suspended')
+				? $this->rearmDate($subscription)
+				: '';
+
 			$model->activateSubscription(
 				(int)$subscription['chip_subscription_id'],
 				(string)$purchase['id'],
-				$model->findTokenIdByPurchase((string)$purchase['id'])
+				$model->findTokenIdByPurchase((string)$purchase['id']),
+				$rearm
 			);
 		}
 	}
