@@ -448,6 +448,101 @@ class Chip extends \Opencart\System\Engine\Model {
 	}
 
 	/**
+	 * Subscriptions belonging to a customer that a renewal died on.
+	 *
+	 * These are the rows a buyer can recover from the storefront. `suspended`
+	 * is the only recoverable state: `completed`/`cancelled` are terminal, and
+	 * `pending` has never been paid (its row is awaiting its first callback).
+	 *
+	 * @param int $customer_id
+	 *
+	 * @return array
+	 */
+	public function getRecoverableSubscriptions(int $customer_id): array {
+		$query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_subscription`
+			WHERE `customer_id` = " . (int)$customer_id . "
+			AND `status` = 'suspended'
+			ORDER BY `chip_subscription_id` ASC");
+
+		return $query->rows;
+	}
+
+	/**
+	 * A subscription by id, but only if it belongs to this customer.
+	 *
+	 * The customer id is part of the WHERE clause rather than checked after the
+	 * fetch, so a forged id can never reach another customer's plan.
+	 *
+	 * @param int $chip_subscription_id
+	 * @param int $customer_id
+	 *
+	 * @return ?array
+	 */
+	public function getSubscriptionForCustomer(int $chip_subscription_id, int $customer_id): ?array {
+		$query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "chip_subscription`
+			WHERE `chip_subscription_id` = " . (int)$chip_subscription_id . "
+			AND `customer_id` = " . (int)$customer_id);
+
+		if ($query->num_rows) {
+			return $query->row;
+		}
+
+		return null;
+	}
+
+	/**
+	 * The amount owed for the cycle a suspended plan stopped on.
+	 *
+	 * A trial cycle bills the trial price, not the recurring price - charging
+	 * the recurring price while trial cycles remain would overcharge the buyer
+	 * for the whole trial. The step is returned alongside so the caller can put
+	 * the schedule back on the cadence the plan was already using.
+	 *
+	 * @param array $subscription chip_subscription row.
+	 *
+	 * @return array price in cents, plus the step to advance the schedule by.
+	 */
+	public function currentCycleAmount(array $subscription): array {
+		$in_trial = (int)$subscription['trial_remaining'] > 0;
+
+		if ($in_trial) {
+			$price     = (float)$subscription['trial_price'];
+			$frequency = (string)$subscription['trial_frequency'];
+			$cycle     = (int)$subscription['trial_cycle'];
+		} else {
+			$price     = (float)$subscription['recurring_price'];
+			$frequency = (string)$subscription['recurring_frequency'];
+			$cycle     = (int)$subscription['recurring_cycle'];
+		}
+
+		return [
+			'price'     => (int)round($price * 100),
+			'in_trial'  => $in_trial,
+			'frequency' => $frequency,
+			'cycle'     => max(1, $cycle)
+		];
+	}
+
+	/**
+	 * The date a recovered plan should next be billed.
+	 *
+	 * Measured from NOW, because the buyer is paying for a period that starts
+	 * with this payment - deriving it from the original due date would either
+	 * hand out a free period or bill again immediately.
+	 *
+	 * @param array $subscription chip_subscription row.
+	 *
+	 * @return string Next due date, or '' when the cadence is unusable.
+	 */
+	public function rearmSubscription(array $subscription): string {
+		$amount = $this->currentCycleAmount($subscription);
+
+		$next = $this->nextCycleDate(date('Y-m-d H:i:s'), $amount['frequency'], $amount['cycle']);
+
+		return ($next === null) ? '' : $next;
+	}
+
+	/**
 	 * Attach a recurring token and make the subscription chargeable.
 	 *
 	 * Only `active` rows are charged by the cron, so this is the single point
