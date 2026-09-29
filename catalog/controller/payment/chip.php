@@ -860,10 +860,13 @@ class Chip extends \Opencart\System\Engine\Controller {
 	 * the wrong cadence bills the customer on a schedule they never agreed to.
 	 *
 	 * @param array $subscription chip_subscription row.
+	 * @param mixed $model        Loaded CHIP payment model. Required: PHP cannot
+	 *                           see a caller's variable inside a helper, so the
+	 *                           model must be threaded in explicitly.
 	 *
 	 * @return string Date, or '' when the schedule is unusable.
 	 */
-	private function rearmDate($subscription) {
+	private function rearmDate($subscription, $model) {
 		if ((int)$subscription['trial_remaining'] > 0) {
 			$frequency = (string)$subscription['trial_frequency'];
 			$cycle     = (int)$subscription['trial_cycle'];
@@ -871,8 +874,6 @@ class Chip extends \Opencart\System\Engine\Controller {
 			$frequency = (string)$subscription['recurring_frequency'];
 			$cycle     = (int)$subscription['recurring_cycle'];
 		}
-
-		$model = $model;
 
 		$next = $model->nextCycleDate(date('Y-m-d H:i:s'), $frequency, $cycle);
 
@@ -914,7 +915,7 @@ class Chip extends \Opencart\System\Engine\Controller {
 			 * was just written by the checkout, so it is left alone.
 			 */
 			$rearm = ($subscription['status'] === 'suspended')
-				? $this->rearmDate($subscription)
+				? $this->rearmDate($subscription, $model)
 				: '';
 
 			$model->activateSubscription(
