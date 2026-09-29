@@ -1,5 +1,11 @@
 == Changelog ==
 
+## [1.3.0] - 2026-09-30
+
+### Fixed
+- A recovered subscription was never billed again. `rearmDate()` returned an empty schedule, so a plan that came back `active` after a recovery payment kept `date_next = 0000-00-00 00:00:00` and was never selected by the renewal cron again. The helper now receives the loaded model and computes the next date.
+- The renewal cron could charge a customer twice for one billing period. The due list was read before the per-subscription lock was taken, so two overlapping runs both saw the same row as due and both billed it. The row is re-read once the lock is held and the charge proceeds only if it is still due.
+
 ## [1.2.0] - 2026-09-29
 
 ### Added
