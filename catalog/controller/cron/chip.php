@@ -2,7 +2,7 @@
 namespace Opencart\Catalog\Controller\Extension\Chip\Cron;
 // Version reported to the gateway. Keep in step with install.json.
 if (!defined('CHIP_OPENCART_VERSION')) {
-	define('CHIP_OPENCART_VERSION', '1.3.0');
+	define('CHIP_OPENCART_VERSION', '1.4.0');
 }
 
 /**
@@ -58,8 +58,17 @@ class Chip extends \Opencart\System\Engine\Controller {
 		$route = (string)($this->request->get['route'] ?? '');
 
 		if ($route !== '' && str_starts_with($route, self::ROUTE)) {
-			$this->response->addHeader($this->request->server['SERVER_PROTOCOL'] . '/1.1 403 Forbidden');
+			/*
+			 * Hygiene, not a behaviour fix: the previous spelling built
+			 * "HTTP/1.1/1.1 403 Forbidden", which PHP still REPAIRS into a
+			 * correct 403 - measured on a live 4.1.0.4 store, this endpoint
+			 * answered 403 before and after. It is normalised to the valid
+			 * status line only so the code reads honestly and matches the
+			 * callback's guard; no client-visible change is claimed.
+			 */
 			$this->response->setOutput('Forbidden');
+			$this->response->addHeader('HTTP/1.1 403 Forbidden');
+
 			return;
 		}
 

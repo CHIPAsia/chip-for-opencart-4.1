@@ -2,7 +2,7 @@
 namespace Opencart\Catalog\Controller\Extension\Chip\Payment;
 // Version reported to the gateway. Keep in step with install.json.
 if (!defined('CHIP_OPENCART_VERSION')) {
-	define('CHIP_OPENCART_VERSION', '1.3.0');
+	define('CHIP_OPENCART_VERSION', '1.4.0');
 }
 class Chip extends \Opencart\System\Engine\Controller {
 	public function index(): string {
@@ -558,8 +558,26 @@ class Chip extends \Opencart\System\Engine\Controller {
 		$purchase_json = file_get_contents('php://input');
 
 		if (openssl_verify( $purchase_json,  base64_decode($HTTP_X_SIGNATURE), $public_key, 'sha256WithRSAEncryption' ) != 1) {
-			$this->response->addHeader($this->request->server['SERVER_PROTOCOL'] . '/1.1 401 Unauthorized');
-			exit;
+			/*
+			 * Refuse a forged signature with a REAL status.
+			 *
+			 * `$this->response->addHeader($this->request->server['SERVER_PROTOCOL']
+			 * . '/1.1 401 Unauthorized')` never reached the client: the header was
+			 * only QUEUED, and Response::output() is what sends it - the exit()
+			 * below returns before that, so a forged callback answered HTTP 200.
+			 * A webhook that answers 200 to a forged body tells the gateway the
+			 * delivery succeeded and stops it retrying.
+			 *
+			 * The status line is sent directly instead, before the exit. Note the
+			 * malformed '/1.1' spelling is NOT the problem here - PHP repairs
+			 * "HTTP/1.1/1.1 401 Unauthorized" into a correct 401; measured on this
+			 * stack, the queued-then-exit shape is what produced the 200.
+			 */
+			if (!headers_sent()) {
+				header('HTTP/1.1 401 Unauthorized', true, 401);
+			}
+
+			exit('Unauthorized');
 		}
 
 		$purchase = json_decode($purchase_json, true);
