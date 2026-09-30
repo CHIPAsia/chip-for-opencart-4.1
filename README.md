@@ -23,7 +23,7 @@ which build an OpenCart 4.0.x store must install.
 | --- | --- | --- | --- |
 | **4.1.0.x** | this repository | ✅ | ✅ via OpenCart's `cron.php` |
 | **4.0.2.x** | `chip-for-opencart` (`4.0`) | ✅ live-tested | ✅ via the build's own endpoint |
-| **4.0.0.0 – 4.0.1.1** | `chip-for-opencart` (`4.0`) | ✅ not live-tested | ✅ via the build's own endpoint |
+| **4.0.0.0 – 4.0.1.1** | `chip-for-opencart` (`4.0`) | ✅ live-tested | ✅ via the build's own endpoint |
 
 **OpenCart 4.1.0.x** is scheduled by OpenCart itself: `cron/subscription.php` creates
 the renewal order and then calls the payment extension back
@@ -120,9 +120,12 @@ The dunning ladder is also exercised with a negative control: with the
 per-subscription lock removed, two overlapping cron runs charge the customer twice;
 with it in place, once.
 
-**OpenCart 4.0.0.0 and 4.0.1.1 have not been exercised on a live store.** Their code
-paths are the same as 4.0.2.3 except for the payment-method entry point, which this
-repo and the `4.0` build both implement.
+**OpenCart 4.0.0.0 and 4.0.1.1 have since been exercised on real stores** with the `4.0`
+build: payments, the paid callback (a corrupted signature and a tampered payload are both
+rejected), the renewal token endpoint refusing an anonymous and a wrong-token request
+without charging, dunning, recovery, and the cron self-guard. Each needed a patch on the
+test store for defects in core's own subscription insert path - core's code, not this
+module's.
 
 ## Other
 
