@@ -2,7 +2,7 @@
 namespace Opencart\Catalog\Controller\Extension\Chip\Account;
 // Version reported to the gateway. Keep in step with install.json.
 if (!defined('CHIP_OPENCART_VERSION')) {
-	define('CHIP_OPENCART_VERSION', '1.3.0');
+	define('CHIP_OPENCART_VERSION', '1.4.0');
 }
 
 class Chip extends \Opencart\System\Engine\Controller {

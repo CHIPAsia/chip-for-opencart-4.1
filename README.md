@@ -112,7 +112,10 @@ This setting is required for the payment gateway redirects and callbacks to func
 Against a real OpenCart store, installed through the Extension Installer:
 
 * **OpenCart 4.1.0.4** — subscription/renewal lifecycle, dunning ladder, recovery from
-  a suspended subscription, and the renewal cron: 36/36 checks pass.
+  a suspended subscription, and the renewal cron: 36/36 checks pass. The callback and
+  cron guards were added to this list for 1.4.0: with the public key configured, a
+  forged callback was **HTTP 200 before the fix and 401 after**, and a correctly signed
+  callback still returns 200; the cron self-guard answers 403 both ways.
 * **OpenCart 4.0.2.3**, with the `4.0` build — the same lifecycle plus the cron token
   endpoint: 52/52 checks pass.
 

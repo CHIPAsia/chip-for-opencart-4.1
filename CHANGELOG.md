@@ -1,5 +1,15 @@
 == Changelog ==
 
+## [1.4.0] - 2026-09-30
+
+### Fixed
+- A forged callback answered **HTTP 200**. The refusal site used `addHeader($this->request->server['SERVER_PROTOCOL'] . '/1.1 401 Unauthorized')` followed by `exit`, and that pairing can never produce a status: `Response::addHeader()` only *queues* a header, and `Response::output()` is what sends it — the `exit()` returns first, so nothing was flushed. A webhook that answers 200 to a forged body tells the gateway the delivery succeeded. The status is now sent directly before the exit. Measured on a live 4.1.0.4 store with the public key configured: **200 with an empty body before, 401 `Unauthorized` after**, while a correctly signed callback still returns 200.
+
+  Worth recording because it contradicts the obvious reading: the malformed `/1.1` spelling is **not** what caused the 200. PHP repairs `HTTP/1.1/1.1 401 Unauthorized` into a correct 401 — measured directly on this stack. It is the queued-header-then-exit shape that loses the status, and a controller that `return`s instead (so `output()` runs) sends the repaired line correctly.
+
+### Changed
+- The cron self-guard's status line was normalised from `SERVER_PROTOCOL . '/1.1 403 Forbidden'` to the plain valid spelling. **This is hygiene, not a behaviour fix**: that endpoint answered 403 before and after, because it uses `setOutput()` + `return` and PHP repairs the line. No client-visible change is claimed for it.
+
 ## [1.3.0] - 2026-09-30
 
 ### Fixed
